@@ -372,8 +372,8 @@ export const ProfileAccountPage: React.FC<ProfileAccountPageProps> = ({
                     <Camera size={13} className="text-[#c28e62]" />
                     <span>Unggah Foto Profil</span>
                   </span>
-                  <span className="text-[11px] text-slate-400 dark:text-zinc-500 max-w-[180px] leading-relaxed">
-                    JPG, PNG, WEBP (1:1)
+                  <span className="text-[11px] text-slate-400 dark:text-zinc-500 max-w-[190px] leading-snug">
+                    JPG, PNG, WEBP · Maks 5MB · 1:1
                   </span>
                 </div>
               )}

@@ -623,8 +623,8 @@ export const CreateSkuPage: React.FC<CreateSkuPageProps> = ({
                     <span className="text-xs sm:text-sm font-semibold text-slate-700 dark:text-zinc-200 mb-1">
                       Unggah Foto Produk
                     </span>
-                    <span className="text-[11px] text-slate-400 dark:text-zinc-500 max-w-[200px] leading-relaxed">
-                      Format JPG, PNG, WEBP. Maks 5MB. Rasio kotak 1:1.
+                    <span className="text-[11px] text-slate-400 dark:text-zinc-500 max-w-[210px] leading-snug">
+                      JPG, PNG, WEBP · Maks 5MB · 1:1
                     </span>
                   </div>
                 )}

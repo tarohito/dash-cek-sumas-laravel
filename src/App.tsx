@@ -10054,15 +10054,15 @@ export default function App() {
                           </div>
                         </>
                       ) : (
-                        <div className="flex flex-col items-center justify-center gap-1.5 p-3 text-center text-slate-400 dark:text-zinc-500">
+                        <div className="flex flex-col items-center justify-center gap-1 p-2.5 text-center text-slate-400 dark:text-zinc-500">
                           <div className="w-9 h-9 rounded-full bg-[#c28e62]/10 text-[#c28e62] flex items-center justify-center">
                             <Upload size={18} />
                           </div>
                           <span className="text-[11px] font-bold text-slate-700 dark:text-zinc-300">
-                            Upload Logo
+                            Unggah Logo
                           </span>
-                          <span className="text-[10px] text-slate-400 dark:text-zinc-500">
-                            Kotak (1:1)
+                          <span className="text-[10px] text-slate-400 dark:text-zinc-500 leading-snug">
+                            JPG, PNG, WEBP · Maks 5MB · 1:1
                           </span>
                         </div>
                       )}
@@ -10286,15 +10286,15 @@ export default function App() {
                           </div>
                         </>
                       ) : (
-                        <div className="flex flex-col items-center justify-center gap-1.5 p-3 text-center text-slate-400 dark:text-zinc-500">
+                        <div className="flex flex-col items-center justify-center gap-1 p-2.5 text-center text-slate-400 dark:text-zinc-500">
                           <div className="w-9 h-9 rounded-full bg-[#c28e62]/10 text-[#c28e62] flex items-center justify-center">
                             <Upload size={18} />
                           </div>
                           <span className="text-[11px] font-bold text-slate-700 dark:text-zinc-300">
-                            Upload Foto
+                            Unggah Foto
                           </span>
-                          <span className="text-[10px] text-slate-400 dark:text-zinc-500">
-                            Kotak (1:1)
+                          <span className="text-[10px] text-slate-400 dark:text-zinc-500 leading-snug">
+                            JPG, PNG, WEBP · Maks 5MB · 1:1
                           </span>
                         </div>
                       )}
@@ -11316,7 +11316,7 @@ export default function App() {
                       <div className="flex flex-col items-center justify-center gap-0.5 text-slate-400 dark:text-zinc-500">
                         <Upload size={15} className="text-[#c28e62]" />
                         <span className="text-[10px] font-semibold text-slate-600 dark:text-zinc-300">
-                          1:1 Foto
+                          1:1
                         </span>
                       </div>
                     )}
@@ -11335,18 +11335,21 @@ export default function App() {
                 </div>
 
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center justify-between mb-0.5">
                     <label className="text-xs font-bold text-slate-700 dark:text-zinc-200">
-                      Foto Profil Pengguna (1:1)
+                      Foto Profil Pengguna
                     </label>
                     <span className="text-[10px] text-slate-400 dark:text-zinc-500">Opsional</span>
                   </div>
+                  <p className="text-[11px] text-slate-400 dark:text-zinc-500 mb-2 leading-snug">
+                    JPG, PNG, WEBP · Maks 5MB · 1:1
+                  </p>
                   <div className="flex flex-wrap items-center gap-2">
                     <label
                       htmlFor="user-quick-avatar-file"
                       className="h-8 px-3.5 rounded-full bg-white dark:bg-zinc-800 hover:bg-slate-50 dark:hover:bg-zinc-700 border border-slate-200 dark:border-zinc-700 text-slate-700 dark:text-zinc-200 text-xs font-semibold cursor-pointer inline-flex items-center justify-center transition-all whitespace-nowrap active:scale-95"
                     >
-                      {userForm.avatar ? 'Ganti Foto' : 'Upload Foto'}
+                      {userForm.avatar ? 'Ganti Foto' : 'Unggah Foto'}
                     </label>
                   </div>
                 </div>
