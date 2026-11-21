@@ -343,7 +343,7 @@ const CustomSelect = ({
     const rect = buttonRef.current.getBoundingClientRect();
     const spaceBelow = window.innerHeight - rect.bottom;
     const minW = minDropdownWidth ?? 220;
-    const dropdownW = Math.max(rect.width, minW);
+    const dropdownW = Math.min(Math.max(rect.width, minW), window.innerWidth - 20);
     const estimatedHeight = Math.min(options.length * 44 + 68, 320);
     
     if (spaceBelow < estimatedHeight && rect.top > estimatedHeight) {
@@ -381,6 +381,10 @@ const CustomSelect = ({
 
   useEffect(() => {
     if (isOpen && searchable) {
+      const isFinePointer =
+        typeof window !== 'undefined' &&
+        window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+      if (!isFinePointer) return;
       const timer = setTimeout(() => {
         searchInputRef.current?.focus();
       }, 50);
@@ -2153,6 +2157,10 @@ export default function App() {
   const actionDropdownCloseTimerRef = useRef<number | null>(null);
   const actionDropdownHoverTimestampRef = useRef<number>(0);
 
+  const isFinePointerDevice = () =>
+    typeof window !== 'undefined' &&
+    window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+
   const cancelCloseActionDropdowns = () => {
     if (actionDropdownCloseTimerRef.current !== null) {
       window.clearTimeout(actionDropdownCloseTimerRef.current);
@@ -2169,6 +2177,7 @@ export default function App() {
   };
 
   const scheduleCloseActionDropdowns = (delay = 160) => {
+    if (!isFinePointerDevice()) return;
     cancelCloseActionDropdowns();
     actionDropdownCloseTimerRef.current = window.setTimeout(() => {
       setOpenDropdownId(null);
@@ -2613,28 +2622,32 @@ export default function App() {
   useEffect(() => {
     if (!openDropdownId && !openBrandDropdownId && !openUserDropdownId && !openSkuDropdownId) return;
 
-    const handleOutsideClick = (e: MouseEvent) => {
+    const handleOutsidePointerDown = (e: PointerEvent) => {
       const target = e.target as HTMLElement;
       if (target && target.closest && target.closest('[data-dropdown-menu], [data-dropdown-trigger]')) return;
       closeAllActionDropdowns();
     };
 
-    const handleScrollOrWheel = () => {
+    const handleScrollOrWheel = (e: Event) => {
+      const target = e.target as HTMLElement | null;
+      if (target && target.closest && target.closest('[data-dropdown-menu]')) return;
       closeAllActionDropdowns();
     };
 
-    window.addEventListener('mousedown', handleOutsideClick, true);
+    const handleResize = () => {
+      closeAllActionDropdowns();
+    };
+
+    window.addEventListener('pointerdown', handleOutsidePointerDown, true);
     window.addEventListener('scroll', handleScrollOrWheel, { capture: true, passive: true });
     window.addEventListener('wheel', handleScrollOrWheel, { capture: true, passive: true });
-    window.addEventListener('touchmove', handleScrollOrWheel, { capture: true, passive: true });
-    window.addEventListener('resize', handleScrollOrWheel);
+    window.addEventListener('resize', handleResize);
 
     return () => {
-      window.removeEventListener('mousedown', handleOutsideClick, true);
+      window.removeEventListener('pointerdown', handleOutsidePointerDown, true);
       window.removeEventListener('scroll', handleScrollOrWheel, true);
       window.removeEventListener('wheel', handleScrollOrWheel, true);
-      window.removeEventListener('touchmove', handleScrollOrWheel, true);
-      window.removeEventListener('resize', handleScrollOrWheel);
+      window.removeEventListener('resize', handleResize);
     };
   }, [openDropdownId, openBrandDropdownId, openUserDropdownId, openSkuDropdownId]);
 
@@ -3384,6 +3397,7 @@ export default function App() {
   };
 
   const openUserDropdownMenu = (target: HTMLElement, userId: string, isHover = false) => {
+    if (isHover && !isFinePointerDevice()) return;
     cancelCloseActionDropdowns();
     setOpenDropdownId(null);
     setOpenBrandDropdownId(null);
@@ -3470,6 +3484,7 @@ export default function App() {
   // HANDLERS KHUSUS SKU / PRODUK (CRUD & RELATIONAL)
   // ==========================================
   const openSkuDropdownMenu = (target: HTMLElement, productId: string, isHover = false) => {
+    if (isHover && !isFinePointerDevice()) return;
     cancelCloseActionDropdowns();
     setOpenDropdownId(null);
     setOpenBrandDropdownId(null);
@@ -4774,6 +4789,7 @@ export default function App() {
   };
 
   const openDropdownMenu = (target: HTMLElement, batchId: string, isHover = false) => {
+    if (isHover && !isFinePointerDevice()) return;
     cancelCloseActionDropdowns();
     setOpenBrandDropdownId(null);
     setOpenUserDropdownId(null);
@@ -4811,6 +4827,7 @@ export default function App() {
   const activeDropdownBatch = batches.find(b => b.id === openDropdownId);
 
   const openBrandDropdownMenu = (target: HTMLElement, brandId: string, isHover = false) => {
+    if (isHover && !isFinePointerDevice()) return;
     cancelCloseActionDropdowns();
     setOpenDropdownId(null);
     setOpenUserDropdownId(null);
@@ -5339,8 +5356,8 @@ export default function App() {
         {/* BOTTOM USER PROFILE CARD */}
         <div className="p-3 border-t border-slate-100 dark:border-zinc-800 flex-shrink-0 bg-white dark:bg-zinc-900">
           {isSidebarMinimized && !isMobile ? (
-            <div className="flex items-center justify-center">
-              <div className="relative w-9 h-9 rounded-full group/profile flex-shrink-0">
+            <div className="flex flex-col items-center gap-2">
+              <div className="relative w-9 h-9 rounded-full flex-shrink-0">
                 {currentUser?.avatar ? (
                   <img 
                     src={currentUser.avatar} 
@@ -5350,27 +5367,27 @@ export default function App() {
                       el.onerror = null;
                       el.src = getInitialsAvatar(currentUser.name, currentUser.id || currentUser.email || currentUser.name);
                     }}
-                    className="w-9 h-9 rounded-full object-cover border border-[#c28e62]/40 transition-opacity duration-150 group-hover/profile:opacity-30" 
+                    className="w-9 h-9 rounded-full object-cover border border-[#c28e62]/40" 
                   />
                 ) : (
                   <div
-                    className="w-9 h-9 rounded-full flex items-center justify-center text-white font-semibold text-xs aspect-square overflow-hidden transition-opacity duration-150 group-hover/profile:opacity-30"
+                    className="w-9 h-9 rounded-full flex items-center justify-center text-white font-semibold text-xs aspect-square overflow-hidden"
                     style={{ backgroundColor: getAvatarColorCss(currentUser?.id || currentUser?.email || currentUser?.name) }}
                   >
                     {getInitials(currentUser?.name, isSuperAdmin ? 'SA' : isBrandB2B ? 'SM' : 'RT')}
                   </div>
                 )}
-                <button
-                  type="button"
-                  onClick={handleLogout}
-                  data-tooltip="Keluar"
-                  data-tooltip-pos="right"
-                  aria-label="Keluar dari akun"
-                  className="absolute inset-0 w-9 h-9 rounded-full bg-rose-600/90 hover:bg-rose-600 text-white flex items-center justify-center opacity-0 scale-90 group-hover/profile:opacity-100 group-hover/profile:scale-100 focus-visible:opacity-100 focus-visible:scale-100 transition-all duration-150 cursor-pointer"
-                >
-                  <LogOut size={15} />
-                </button>
               </div>
+              <button
+                type="button"
+                onClick={handleLogout}
+                data-tooltip="Keluar"
+                data-tooltip-pos="right"
+                aria-label="Keluar dari akun"
+                className="w-9 h-9 rounded-full text-slate-500 dark:text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 active:bg-rose-100 dark:active:bg-rose-950/60 flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <LogOut size={16} />
+              </button>
             </div>
           ) : (
             <div className="flex items-center gap-1.5">
@@ -5950,7 +5967,7 @@ export default function App() {
                         <div className={`relative inline-block transition-opacity duration-150 ${
                           openBrandDropdownId === brand.id 
                             ? 'opacity-100 pointer-events-auto' 
-                            : 'opacity-0 pointer-events-none group-hover/brand:opacity-100 group-hover/brand:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto'
+                            : 'opacity-100 pointer-events-auto lg:opacity-0 lg:pointer-events-none lg:group-hover/brand:opacity-100 lg:group-hover/brand:pointer-events-auto lg:focus-within:opacity-100 lg:focus-within:pointer-events-auto [@media(hover:none)]:opacity-100 [@media(hover:none)]:pointer-events-auto'
                         }`}>
                           <button 
                             type="button"
@@ -6441,7 +6458,7 @@ export default function App() {
                           <div className={`relative inline-block transition-opacity duration-150 ${
                             openUserDropdownId === user.id 
                               ? 'opacity-100 pointer-events-auto' 
-                              : 'opacity-0 pointer-events-none group-hover/user:opacity-100 group-hover/user:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto'
+                              : 'opacity-100 pointer-events-auto lg:opacity-0 lg:pointer-events-none lg:group-hover/user:opacity-100 lg:group-hover/user:pointer-events-auto lg:focus-within:opacity-100 lg:focus-within:pointer-events-auto [@media(hover:none)]:opacity-100 [@media(hover:none)]:pointer-events-auto'
                           }`}>
                             <button 
                               type="button"
@@ -6807,7 +6824,7 @@ export default function App() {
                             <div className={`relative inline-block transition-opacity duration-150 ${
                               openSkuDropdownId === prod.id 
                                 ? 'opacity-100 pointer-events-auto' 
-                                : 'opacity-0 pointer-events-none group-hover/sku:opacity-100 group-hover/sku:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto'
+                                : 'opacity-100 pointer-events-auto lg:opacity-0 lg:pointer-events-none lg:group-hover/sku:opacity-100 lg:group-hover/sku:pointer-events-auto lg:focus-within:opacity-100 lg:focus-within:pointer-events-auto [@media(hover:none)]:opacity-100 [@media(hover:none)]:pointer-events-auto'
                             }`}>
                               <button 
                                 type="button"
@@ -7409,7 +7426,7 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-screen bg-[#f8fafc] dark:bg-black font-sans text-slate-800 dark:text-zinc-200 antialiased overflow-hidden">
+    <div className="flex h-[100dvh] bg-[#f8fafc] dark:bg-black font-sans text-slate-800 dark:text-zinc-200 antialiased overflow-hidden">
       <CustomTooltipProvider />
       
       {/* DESKTOP / TABLET SIDEBAR */}
@@ -7419,12 +7436,14 @@ export default function App() {
 
       {/* MOBILE DRAWER SIDEBAR */}
       {isMobileMenuOpen && (
-        <div className="fixed inset-0 z-50 md:hidden flex animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[1200] md:hidden flex animate-in fade-in duration-200">
           <div className="fixed inset-0 bg-slate-900/60 dark:bg-black/80 backdrop-blur-sm" onClick={() => setIsMobileMenuOpen(false)}></div>
-          <div className="relative bg-white dark:bg-zinc-900 w-72 h-full flex flex-col z-10 animate-in slide-in-from-left duration-300 border-r border-slate-200 dark:border-zinc-800">
+          <div className="relative bg-white dark:bg-zinc-900 w-[min(18rem,85vw)] h-full flex flex-col z-10 animate-in slide-in-from-left duration-300 border-r border-slate-200 dark:border-zinc-800">
             <button 
+              type="button"
+              aria-label="Tutup menu navigasi"
               onClick={() => setIsMobileMenuOpen(false)}
-              className="absolute right-4 top-5 text-slate-400 dark:text-zinc-500 hover:text-slate-600 dark:hover:text-zinc-300 p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-zinc-800 cursor-pointer"
+              className="absolute right-3 top-3.5 z-20 text-slate-500 dark:text-zinc-400 hover:text-slate-700 dark:hover:text-zinc-200 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-zinc-800 cursor-pointer"
             >
               <X size={20} />
             </button>
@@ -7437,20 +7456,24 @@ export default function App() {
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
         
         {/* TOP HEADER */}
-        <header className="h-16 bg-white dark:bg-zinc-900 border-b border-slate-200 dark:border-zinc-700 flex items-center justify-between px-3.5 sm:px-6 lg:px-8 flex-shrink-0 z-10 gap-2">
+        <header className="h-16 bg-white dark:bg-zinc-900 border-b border-slate-200 dark:border-zinc-700 flex items-center justify-between px-3.5 sm:px-6 lg:px-8 flex-shrink-0 z-30 gap-2">
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             {/* Mobile Menu Toggle */}
             <button 
+              type="button"
+              aria-label="Buka menu navigasi"
               onClick={() => setIsMobileMenuOpen(true)}
-              className="md:hidden text-slate-600 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-zinc-200 p-1.5 -ml-1 rounded-full hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+              className="md:hidden w-10 h-10 -ml-1.5 flex items-center justify-center text-slate-600 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-zinc-200 rounded-full hover:bg-slate-100 dark:hover:bg-zinc-800 active:bg-slate-200/70 dark:active:bg-zinc-700 transition-colors cursor-pointer shrink-0"
             >
               <Menu size={22} />
             </button>
 
             {/* Laptop & Desktop Sidebar Toggle */}
             <button 
+              type="button"
+              aria-label={isSidebarMinimized ? "Perluas Sidebar" : "Persempit Sidebar"}
               onClick={() => setIsSidebarMinimized(prev => !prev)}
-              className="hidden md:flex text-slate-500 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-zinc-200 p-1.5 -ml-1 rounded-full hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+              className="hidden md:flex w-9 h-9 -ml-1 items-center justify-center text-slate-500 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-zinc-200 rounded-full hover:bg-slate-100 dark:hover:bg-zinc-800 active:bg-slate-200/70 dark:active:bg-zinc-700 transition-colors cursor-pointer shrink-0"
               data-tooltip={isSidebarMinimized ? "Perluas Sidebar" : "Persempit Sidebar"}
               data-tooltip-pos="bottom"
             >
@@ -7815,7 +7838,7 @@ export default function App() {
                           </button>
                         </td>
                         <td className="px-5 py-3.5 text-right">
-                          <div className={`relative inline-block transition-opacity duration-150 ${openDropdownId === batch.id ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none group-hover/row:opacity-100 group-hover/row:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto'}`}>
+                          <div className={`relative inline-block transition-opacity duration-150 ${openDropdownId === batch.id ? 'opacity-100 pointer-events-auto' : 'opacity-100 pointer-events-auto lg:opacity-0 lg:pointer-events-none lg:group-hover/row:opacity-100 lg:group-hover/row:pointer-events-auto lg:focus-within:opacity-100 lg:focus-within:pointer-events-auto [@media(hover:none)]:opacity-100 [@media(hover:none)]:pointer-events-auto'}`}>
                             <button 
                               type="button"
                               data-dropdown-trigger="true"
@@ -9050,7 +9073,7 @@ export default function App() {
                         <span>Memuat data tag dari database...</span>
                       </div>
                     ) : filteredTags.length > 0 ? (
-                      <div className="grid grid-cols-4 sm:grid-cols-8 gap-2 sm:gap-2.5 w-full">
+                      <div className="grid grid-cols-2 min-[420px]:grid-cols-3 sm:grid-cols-6 lg:grid-cols-8 gap-2 sm:gap-2.5 w-full">
                         {filteredTags.map((tag) => {
                           const isAvailable = tag.status === 'Tersedia';
                           const isSelected = selectedTagsToAllocate.includes(tag.id);
@@ -9063,12 +9086,15 @@ export default function App() {
                               key={tag.id}
                               onClick={(e) => {
                                 if (isInteractive) {
-                                  const rect = e.currentTarget.getBoundingClientRect();
-                                  setHoveredTagInfo({ tag, rect });
+                                  if (isFinePointerDevice()) {
+                                    const rect = e.currentTarget.getBoundingClientRect();
+                                    setHoveredTagInfo({ tag, rect });
+                                  }
                                   toggleTagSelection(tag.id);
                                 }
                               }}
                               onMouseEnter={(e) => {
+                                if (!isFinePointerDevice()) return;
                                 const rect = e.currentTarget.getBoundingClientRect();
                                 setHoveredTagInfo({ tag, rect });
                               }}
@@ -10022,7 +10048,7 @@ export default function App() {
                             }}
                             className="w-full h-full object-cover" 
                           />
-                          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-[11px] font-semibold gap-1">
+                          <div className="absolute inset-x-0 bottom-0 py-1.5 bg-black/60 lg:inset-0 lg:bg-black/50 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-[11px] font-semibold gap-1">
                             <Upload size={16} />
                             <span>Ganti Logo</span>
                           </div>
@@ -10254,7 +10280,7 @@ export default function App() {
                             }}
                             className="w-full h-full object-cover" 
                           />
-                          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-[11px] font-semibold gap-1">
+                          <div className="absolute inset-x-0 bottom-0 py-1.5 bg-black/60 lg:inset-0 lg:bg-black/50 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity flex flex-col items-center justify-center text-white text-[11px] font-semibold gap-1">
                             <Upload size={16} />
                             <span>Ganti Foto</span>
                           </div>

@@ -448,7 +448,7 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
             </h2>
           </div>
 
-          <div className="flex items-center gap-3 self-start sm:self-auto">
+          <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto">
             {canManage ? (
               <>
                 {hasChanges && (

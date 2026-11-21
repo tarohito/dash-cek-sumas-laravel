@@ -443,10 +443,10 @@ export const CategoryManager: React.FC<CategoryManagerProps> = ({ currentRole = 
         </div>
 
         {/* 3 COLUMN GRID: KATEGORI UTAMA, SUB KATEGORI, VARIAN / JENIS */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-5 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-5 items-start">
 
           {/* KOLOM 1: KATEGORI UTAMA */}
-          <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-2xl overflow-hidden flex flex-col h-[600px]">
+          <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-2xl overflow-hidden flex flex-col h-[360px] sm:h-[420px] lg:h-[600px]">
             <div className="p-3.5 border-b border-slate-100 dark:border-zinc-800 bg-slate-50/70 dark:bg-zinc-800/40">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
@@ -575,7 +575,7 @@ export const CategoryManager: React.FC<CategoryManagerProps> = ({ currentRole = 
                               className={`flex items-center gap-0.5 shrink-0 transition-opacity duration-150 ${
                                 isSelected 
                                   ? 'opacity-100 pointer-events-auto' 
-                                  : 'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto'
+                                  : 'opacity-100 pointer-events-auto lg:opacity-0 lg:pointer-events-none lg:group-hover:opacity-100 lg:group-hover:pointer-events-auto lg:group-focus-within:opacity-100 lg:group-focus-within:pointer-events-auto [@media(hover:none)]:opacity-100 [@media(hover:none)]:pointer-events-auto'
                               }`} 
                               onClick={(e) => e.stopPropagation()}
                             >
@@ -615,7 +615,7 @@ export const CategoryManager: React.FC<CategoryManagerProps> = ({ currentRole = 
           </div>
 
           {/* KOLOM 2: SUB KATEGORI */}
-          <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-2xl overflow-hidden flex flex-col h-[600px]">
+          <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-2xl overflow-hidden flex flex-col h-[360px] sm:h-[420px] lg:h-[600px]">
             <div className="p-3.5 border-b border-slate-100 dark:border-zinc-800 bg-slate-50/70 dark:bg-zinc-800/40">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
@@ -763,7 +763,7 @@ export const CategoryManager: React.FC<CategoryManagerProps> = ({ currentRole = 
                               className={`flex items-center gap-0.5 shrink-0 transition-opacity duration-150 ${
                                 isSelected 
                                   ? 'opacity-100 pointer-events-auto' 
-                                  : 'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto'
+                                  : 'opacity-100 pointer-events-auto lg:opacity-0 lg:pointer-events-none lg:group-hover:opacity-100 lg:group-hover:pointer-events-auto lg:group-focus-within:opacity-100 lg:group-focus-within:pointer-events-auto [@media(hover:none)]:opacity-100 [@media(hover:none)]:pointer-events-auto'
                               }`} 
                               onClick={(e) => e.stopPropagation()}
                             >
@@ -803,7 +803,7 @@ export const CategoryManager: React.FC<CategoryManagerProps> = ({ currentRole = 
           </div>
 
           {/* KOLOM 3: VARIAN / JENIS */}
-          <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-2xl overflow-hidden flex flex-col h-[600px]">
+          <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-2xl overflow-hidden flex flex-col h-[360px] sm:h-[420px] lg:h-[600px]">
             <div className="p-3.5 border-b border-slate-100 dark:border-zinc-800 bg-slate-50/70 dark:bg-zinc-800/40">
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2">
@@ -951,7 +951,7 @@ export const CategoryManager: React.FC<CategoryManagerProps> = ({ currentRole = 
                               className={`flex items-center gap-0.5 shrink-0 transition-opacity duration-150 ${
                                 isSelected 
                                   ? 'opacity-100 pointer-events-auto' 
-                                  : 'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto'
+                                  : 'opacity-100 pointer-events-auto lg:opacity-0 lg:pointer-events-none lg:group-hover:opacity-100 lg:group-hover:pointer-events-auto lg:group-focus-within:opacity-100 lg:group-focus-within:pointer-events-auto [@media(hover:none)]:opacity-100 [@media(hover:none)]:pointer-events-auto'
                               }`}
                               onClick={(e) => e.stopPropagation()}
                             >

@@ -18,7 +18,12 @@ export const CustomTooltipProvider: React.FC = () => {
   const currentTargetRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
+    const canHover = () =>
+      typeof window !== 'undefined' &&
+      window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+
     const handleMouseOver = (e: MouseEvent) => {
+      if (!canHover()) return;
       const target = (e.target as HTMLElement)?.closest('[data-tooltip], [title]') as HTMLElement;
       if (!target) {
         if (currentTargetRef.current) {

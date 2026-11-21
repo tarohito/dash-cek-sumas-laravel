@@ -131,7 +131,7 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
         style={{
           top: safeTop,
           right: safeRight,
-          maxHeight: `min(560px, calc(100vh - ${safeTop + 16}px))`,
+          maxHeight: `min(560px, calc(100dvh - ${safeTop + 16}px))`,
         }}
       >
         {/* HEADER */}
@@ -355,7 +355,7 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
                                 }}
                                 title="Tandai sudah dibaca"
                                 aria-label="Tandai sudah dibaca"
-                                className="w-5 h-5 rounded text-slate-400 dark:text-zinc-500 hover:text-slate-800 dark:hover:text-zinc-100 hover:bg-slate-200/70 dark:hover:bg-zinc-700 inline-flex items-center justify-center transition-all sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 cursor-pointer"
+                                className="w-6 h-6 sm:w-5 sm:h-5 rounded text-slate-400 dark:text-zinc-500 hover:text-slate-800 dark:hover:text-zinc-100 hover:bg-slate-200/70 dark:hover:bg-zinc-700 inline-flex items-center justify-center transition-all opacity-100 lg:opacity-0 lg:group-hover:opacity-100 [@media(hover:none)]:opacity-100 focus:opacity-100 cursor-pointer"
                               >
                                 <Check size={12} />
                               </button>

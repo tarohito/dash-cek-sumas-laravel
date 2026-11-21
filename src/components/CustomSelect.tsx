@@ -46,7 +46,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
     const rect = buttonRef.current.getBoundingClientRect();
     const spaceBelow = window.innerHeight - rect.bottom;
     const minW = minDropdownWidth ?? 220;
-    const dropdownW = Math.max(rect.width, minW);
+    const dropdownW = Math.min(Math.max(rect.width, minW), window.innerWidth - 20);
     const estimatedHeight = Math.min(options.length * 44 + 68, 320);
     
     if (spaceBelow < estimatedHeight && rect.top > estimatedHeight) {
@@ -84,6 +84,10 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
 
   useEffect(() => {
     if (isOpen && searchable) {
+      const isFinePointer =
+        typeof window !== 'undefined' &&
+        window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+      if (!isFinePointer) return;
       const timer = setTimeout(() => {
         searchInputRef.current?.focus();
       }, 50);

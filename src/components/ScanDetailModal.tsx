@@ -347,14 +347,14 @@ export const ScanDetailModal: React.FC<ScanDetailModalProps> = ({
       onClick={(e) => { 
         if (e.target === e.currentTarget) onClose(); 
       }} 
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-900/60 dark:bg-black/80 backdrop-blur-xs animate-in fade-in duration-150"
+      className="fixed inset-0 z-[10005] flex items-center justify-center p-2.5 sm:p-5 bg-slate-900/60 dark:bg-black/80 backdrop-blur-xs animate-in fade-in duration-150"
     >
       <div 
-        className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[92vh] animate-in zoom-in-95 duration-150"
+        className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[92dvh] animate-in zoom-in-95 duration-150"
         onClick={(e) => e.stopPropagation()}
       >
         {/* HEADER: Judul 1 Baris dengan Icon Tanpa Subtitle */}
-        <div className="px-6 py-4 border-b border-slate-100 dark:border-zinc-800 flex items-center justify-between gap-3 shrink-0">
+        <div className="px-4 sm:px-6 py-3.5 sm:py-4 border-b border-slate-100 dark:border-zinc-800 flex items-center justify-between gap-3 shrink-0">
           <div className="flex items-center gap-2.5 min-w-0">
             <div className="w-8 h-8 rounded-xl bg-[#c28e62]/10 text-[#c28e62] flex items-center justify-center shrink-0">
               <Scan size={18} />
@@ -367,7 +367,7 @@ export const ScanDetailModal: React.FC<ScanDetailModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200 transition-colors cursor-pointer shrink-0"
+            className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-400 hover:text-slate-600 dark:hover:text-zinc-200 transition-colors cursor-pointer shrink-0"
             aria-label="Tutup"
           >
             <X size={18} />
@@ -375,7 +375,7 @@ export const ScanDetailModal: React.FC<ScanDetailModalProps> = ({
         </div>
 
         {/* MODAL BODY */}
-        <div className="flex-1 overflow-y-auto p-5 sm:p-6 space-y-5">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-5">
           
           {/* PERINGATAN TELEMETRI SESUAI STATUS (PROFESIONAL & SELARAS) */}
           {telemetryAlert && (
@@ -396,7 +396,7 @@ export const ScanDetailModal: React.FC<ScanDetailModalProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             
             {/* KOLOM KIRI: PETA TITIK LOKASI SCAN */}
-            <div className="relative rounded-2xl border border-slate-200 dark:border-zinc-800 overflow-hidden bg-slate-100 dark:bg-zinc-800 h-[210px] flex items-center justify-center">
+            <div className="relative isolate rounded-2xl border border-slate-200 dark:border-zinc-800 overflow-hidden bg-slate-100 dark:bg-zinc-800 h-[210px] flex items-center justify-center">
               <div ref={mapContainerRef} className="w-full h-full z-0" />
 
               {/* Tombol Langsung ke Google Maps (Kanan Atas Peta) */}
@@ -405,7 +405,7 @@ export const ScanDetailModal: React.FC<ScanDetailModalProps> = ({
                   href={`https://www.google.com/maps?q=${activeSession.lat},${activeSession.lng}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="absolute top-2.5 right-2.5 z-10 bg-white/95 dark:bg-zinc-900/95 hover:bg-white dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-200 text-[11px] font-semibold px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-zinc-700 shadow-sm hover:shadow flex items-center gap-1.5 transition-all group backdrop-blur-xs cursor-pointer"
+                  className="absolute top-2.5 right-2.5 z-[450] bg-white/95 dark:bg-zinc-900/95 hover:bg-white dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-200 text-[11px] font-semibold px-2.5 py-1.5 rounded-xl border border-slate-200 dark:border-zinc-700 shadow-sm hover:shadow flex items-center gap-1.5 transition-all group backdrop-blur-xs cursor-pointer"
                   title="Buka titik koordinat pemindaian ini di Google Maps"
                 >
                   <span>Google Maps</span>

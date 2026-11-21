@@ -338,7 +338,7 @@ export const ProfileAccountPage: React.FC<ProfileAccountPageProps> = ({
                     alt={name || 'Foto Profil'}
                     className="w-full h-full object-cover rounded-xl"
                   />
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                  <div className="absolute inset-x-0 bottom-0 p-2.5 bg-gradient-to-t from-black/70 via-black/40 to-transparent lg:inset-0 lg:bg-black/40 lg:bg-none opacity-100 lg:opacity-0 lg:group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity flex items-center justify-center gap-2">
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
@@ -351,6 +351,7 @@ export const ProfileAccountPage: React.FC<ProfileAccountPageProps> = ({
                       onClick={() => setAvatar('')}
                       className="p-2 rounded-full bg-rose-500 text-white hover:bg-rose-600 transition-colors cursor-pointer shadow-xs"
                       title="Hapus Foto"
+                      aria-label="Hapus Foto"
                     >
                       <Trash2 size={16} />
                     </button>
