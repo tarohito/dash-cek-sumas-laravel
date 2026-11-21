@@ -19,11 +19,11 @@ return new class extends Migration
             $table->text('specs')->nullable();
             $table->integer('pinLength');
             $table->string('status', 40);
-            $table->boolean('isB2B')->default(false);
+            $table->tinyInteger('isB2B')->default(0);
             $table->string('redirectUrl', 500)->default('https://cek.sumas.id/');
             $table->string('qrType', 20)->default('dynamic');
-            $table->boolean('requirePin')->default(true);
-            $table->boolean('enableGps')->default(true);
+            $table->tinyInteger('requirePin')->default(1);
+            $table->tinyInteger('enableGps')->default(1);
         });
 
         Schema::create('tags', function (Blueprint $table) {
@@ -58,7 +58,7 @@ return new class extends Migration
             $table->string('latestTagId', 128)->nullable()->index('idx_scan_points_tagId');
             $table->string('pin', 32)->nullable()->index('idx_scan_points_pin');
             $table->string('latestTime', 80)->nullable();
-            $table->boolean('isB2B')->default(false);
+            $table->tinyInteger('isB2B')->default(0);
             $table->string('status', 40)->default('valid')->index('idx_scan_points_status');
             $table->text('anomalyReason')->nullable();
             $table->string('deviceInfo', 255)->nullable();
@@ -119,7 +119,7 @@ return new class extends Migration
             $table->string('brandName', 120)->index('idx_products_brandName');
             $table->string('sku', 200)->index('idx_products_sku');
             $table->string('category', 160)->nullable();
-            $table->boolean('isB2B')->default(false);
+            $table->tinyInteger('isB2B')->default(0);
             $table->text('description')->nullable();
             $table->string('createdAt', 80)->nullable();
             $table->string('skuCode', 80)->nullable();

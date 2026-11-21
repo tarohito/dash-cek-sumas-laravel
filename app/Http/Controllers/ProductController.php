@@ -105,13 +105,13 @@ class ProductController extends Controller
         if (count($batchIds) > 0) {
             $statsRow = DB::table('tags')
                 ->whereIn('batchId', $batchIds)
-                ->selectRaw("COUNT(*) as totalTags, SUM(CASE WHEN status = 'Telah Digunakan' THEN 1 ELSE 0 END) as usedTags, SUM(CASE WHEN status = 'Tersedia' THEN 1 ELSE 0 END) as availableTags")
+                ->selectRaw("COUNT(*) as total_tags, SUM(CASE WHEN status = 'Telah Digunakan' THEN 1 ELSE 0 END) as used_tags, SUM(CASE WHEN status = 'Tersedia' THEN 1 ELSE 0 END) as available_tags")
                 ->first();
             if ($statsRow) {
                 $tagStats = [
-                    'totalTags' => (int) ($statsRow->totalTags ?? 0),
-                    'usedTags' => (int) ($statsRow->usedTags ?? 0),
-                    'availableTags' => (int) ($statsRow->availableTags ?? 0),
+                    'totalTags' => (int) ($statsRow->total_tags ?? 0),
+                    'usedTags' => (int) ($statsRow->used_tags ?? 0),
+                    'availableTags' => (int) ($statsRow->available_tags ?? 0),
                 ];
             }
 
@@ -148,14 +148,15 @@ class ProductController extends Controller
         }
 
         $escapedSku = '%' . SecurityHardeningService::escapeLikePattern(strtolower((string) $prod->sku)) . '%';
+        $wrappedProductType = DB::getQueryGrammar()->wrap('productType');
         $scanRows = DB::table('scan_points')
             ->select(['city', 'province', 'venue', 'totalScans', 'todayScans', 'status', 'latestTime', 'deviceInfo'])
             ->where(function ($q) use ($prod, $brandTargetName) {
                 $q->whereRaw('LOWER(brand) = LOWER(?)', [$prod->brandName])
                     ->orWhereRaw('LOWER(brand) = LOWER(?)', [$brandTargetName]);
             })
-            ->where(function ($q) use ($escapedSku, $batchIds) {
-                $q->whereRaw("LOWER(productType) LIKE ? ESCAPE '!'", [$escapedSku]);
+            ->where(function ($q) use ($escapedSku, $batchIds, $wrappedProductType) {
+                $q->whereRaw("LOWER({$wrappedProductType}) LIKE ? ESCAPE '!'", [$escapedSku]);
                 if (count($batchIds) > 0) {
                     $q->orWhereIn('batchId', $batchIds);
                 }

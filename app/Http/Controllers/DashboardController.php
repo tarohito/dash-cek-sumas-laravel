@@ -69,9 +69,10 @@ class DashboardController extends Controller
             : collect();
 
         $tagCountsByBatch = DB::table('tags')
-            ->selectRaw('batchId, COUNT(*) as totalCount')
+            ->select('batchId')
+            ->selectRaw('COUNT(*) as total_count')
             ->groupBy('batchId')
-            ->pluck('totalCount', 'batchId');
+            ->pluck('total_count', 'batchId');
 
         $brandStatsMap = [];
         $activeBatches = 0;

@@ -19,7 +19,8 @@ class BatchController extends Controller
 
         $scope = $this->brandScope($request);
         $tagCounts = DB::table('tags')
-            ->selectRaw("batchId, COUNT(*) as totalCount, SUM(CASE WHEN status = 'Tersedia' THEN 1 ELSE 0 END) as availableCount, SUM(CASE WHEN status = 'Telah Digunakan' THEN 1 ELSE 0 END) as usedCount")
+            ->select('batchId')
+            ->selectRaw("COUNT(*) as total_count, SUM(CASE WHEN status = 'Tersedia' THEN 1 ELSE 0 END) as available_count, SUM(CASE WHEN status = 'Telah Digunakan' THEN 1 ELSE 0 END) as used_count")
             ->groupBy('batchId')
             ->get()
             ->keyBy('batchId');
@@ -35,9 +36,9 @@ class BatchController extends Controller
             $tc = $tagCounts->get($row['id']);
             $row['qty'] = (int) ($row['qty'] ?? 0);
             $row['pinLength'] = (int) ($row['pinLength'] ?? 8);
-            $row['actualTagCount'] = $tc ? (int) $tc->totalCount : 0;
-            $row['availableCount'] = $tc ? (int) $tc->availableCount : 0;
-            $row['usedCount'] = $tc ? (int) $tc->usedCount : 0;
+            $row['actualTagCount'] = $tc ? (int) $tc->total_count : 0;
+            $row['availableCount'] = $tc ? (int) $tc->available_count : 0;
+            $row['usedCount'] = $tc ? (int) $tc->used_count : 0;
             $row['isB2B'] = (bool) ($row['isB2B'] ?? false);
             $row['redirectUrl'] = $row['redirectUrl'] ?: 'https://cek.sumas.id/';
             $row['qrType'] = $row['qrType'] ?: 'dynamic';
@@ -293,8 +294,13 @@ class BatchController extends Controller
             ->selectRaw("COUNT(*) as total, SUM(CASE WHEN status = 'Tersedia' THEN 1 ELSE 0 END) as available, SUM(CASE WHEN status = 'Telah Digunakan' THEN 1 ELSE 0 END) as used")
             ->first();
 
+        $grammar = DB::getQueryGrammar();
+        $wCodeType = $grammar->wrap('codeType');
+        $wProdCode = $grammar->wrap('prodCode');
+        $wAllocatedAt = $grammar->wrap('allocatedAt');
+
         $projectAllocations = DB::table('tags')
-            ->selectRaw("project as name, COUNT(*) as count, MAX(specs) as specs, MAX(warranty) as warranty, MAX(codeType) as codeType, MAX(prodCode) as prodCode, MAX(note) as note, MAX(allocatedAt) as date")
+            ->selectRaw("project as name, COUNT(*) as count, MAX(specs) as specs, MAX(warranty) as warranty, MAX({$wCodeType}) as code_type, MAX({$wProdCode}) as prod_code, MAX(note) as note, MAX({$wAllocatedAt}) as date")
             ->where('batchId', $batch->id)
             ->whereNotNull('project')
             ->where('status', 'Telah Digunakan')
@@ -302,8 +308,16 @@ class BatchController extends Controller
             ->get()
             ->map(function ($row) {
                 $arr = (array) $row;
-                $arr['count'] = (int) ($arr['count'] ?? 0);
-                return $arr;
+                return [
+                    'name' => $arr['name'] ?? null,
+                    'count' => (int) ($arr['count'] ?? 0),
+                    'specs' => $arr['specs'] ?? null,
+                    'warranty' => $arr['warranty'] ?? null,
+                    'codeType' => $arr['code_type'] ?? null,
+                    'prodCode' => $arr['prod_code'] ?? null,
+                    'note' => $arr['note'] ?? null,
+                    'date' => $arr['date'] ?? null,
+                ];
             })
             ->all();
 
