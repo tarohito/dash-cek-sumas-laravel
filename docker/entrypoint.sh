@@ -4,6 +4,12 @@ set -euo pipefail
 cd /var/www/html
 
 export PORT="${PORT:-10000}"
+export APP_ENV="${APP_ENV:-production}"
+export APP_DEBUG="${APP_DEBUG:-false}"
+export LOG_CHANNEL="${LOG_CHANNEL:-stderr}"
+export SESSION_DRIVER="${SESSION_DRIVER:-file}"
+export CACHE_STORE="${CACHE_STORE:-file}"
+export QUEUE_CONNECTION="${QUEUE_CONNECTION:-sync}"
 
 # Auto-use platform external HTTPS URL if APP_URL is not set yet (Render / Railway)
 if [ -z "${APP_URL:-}" ]; then
@@ -47,6 +53,7 @@ if [ "${DB_CONNECTION}" = "sqlite" ]; then
     mkdir -p "$(dirname "${DB_FILE}")"
     touch "${DB_FILE}"
     chown -R www-data:www-data "$(dirname "${DB_FILE}")"
+    chmod -R ug+rwX "$(dirname "${DB_FILE}")"
 fi
 
 # Provide a fallback APP_KEY if not configured yet so the app can boot cleanly
@@ -56,6 +63,7 @@ if [ -z "${APP_KEY:-}" ]; then
 fi
 
 chown -R www-data:www-data storage bootstrap/cache
+chmod -R ug+rwX storage bootstrap/cache
 
 # Clear stale caches, migrate database, and seed initial Sumas data if empty
 php artisan config:clear --no-interaction || true
@@ -88,9 +96,11 @@ php artisan route:cache --no-interaction
 php artisan view:cache --no-interaction
 
 chown -R www-data:www-data storage bootstrap/cache
+chmod -R ug+rwX storage bootstrap/cache
 if [ "${DB_CONNECTION}" = "sqlite" ]; then
     chown -R www-data:www-data "$(dirname "${DB_DATABASE}")"
+    chmod -R ug+rwX "$(dirname "${DB_DATABASE}")"
 fi
 
-echo "[Entrypoint] Starting Apache on port ${PORT} (DB_CONNECTION=${DB_CONNECTION})..."
+echo "[Entrypoint] Starting Apache on port ${PORT} (DB_CONNECTION=${DB_CONNECTION}, SESSION_DRIVER=${SESSION_DRIVER}, APP_URL=${APP_URL:-unset})..."
 exec apache2-foreground
