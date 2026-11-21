@@ -45,6 +45,31 @@ a,
   display: none;
 }
 
+@keyframes sumas-progress {
+  0% {
+    transform: translateX(-110%);
+  }
+  50% {
+    transform: translateX(95%);
+  }
+  100% {
+    transform: translateX(260%);
+  }
+}
+
+.sumas-progress-bar {
+  animation: sumas-progress 1.45s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sumas-progress-bar {
+    animation: none;
+    width: 100%;
+    transform: none;
+  }
+}
+
 /* Kode Mono typography for PIN numbers */
 .font-kode-mono, .font-pin {
   font-family: 'Kode Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;

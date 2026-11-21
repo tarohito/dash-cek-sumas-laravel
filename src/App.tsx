@@ -81,6 +81,7 @@ import { CategoryManager } from './components/CategoryManager';
 import { CreateSkuPage } from './components/CreateSkuPage';
 import { SettingsManager } from './components/SettingsManager';
 import { LoginPage } from './components/LoginPage';
+import { SplashScreen } from './components/SplashScreen';
 import { RolePermissionsPanel } from './components/RolePermissionsPanel';
 import { ProfileAccountPage, type ProfileUpdatePayload } from './components/ProfileAccountPage';
 import {
@@ -7404,15 +7405,7 @@ export default function App() {
   const usedCount = tagsUsedCount || (activeBatch?.usedCount ?? currentTags.filter((t: any) => t.status === 'Telah Digunakan').length);
 
   if (!isAuthChecked) {
-    return (
-      <div className="min-h-screen w-full flex flex-col items-center justify-center gap-4 bg-white dark:bg-zinc-950 text-slate-700 dark:text-zinc-300">
-        <SumasLogo className="h-8 w-auto object-contain" />
-        <div className="flex items-center gap-2 text-xs font-medium text-slate-500 dark:text-zinc-400">
-          <RefreshCw size={14} className="animate-spin text-[#c28e62]" />
-          <span>Memeriksa sesi autentikasi...</span>
-        </div>
-      </div>
-    );
+    return <SplashScreen message="Memeriksa sesi autentikasi..." />;
   }
 
   if (!authUser) {
