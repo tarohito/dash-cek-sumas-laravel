@@ -54,8 +54,9 @@ RUN { \
         echo "opcache.validate_timestamps=0"; \
     } > /usr/local/etc/php/conf.d/99-render-production.ini
 
-# Enable Apache modules and install Render-ready VirtualHost + low-memory prefork config
-RUN a2enmod rewrite headers
+# Enable Apache modules (ensure ONLY mpm_prefork is loaded to prevent AH00534)
+RUN rm -f /etc/apache2/mods-enabled/mpm_*.load /etc/apache2/mods-enabled/mpm_*.conf \
+    && a2enmod mpm_prefork rewrite headers
 COPY docker/apache.conf /etc/apache2/sites-available/000-default.conf
 COPY docker/mpm_prefork.conf /etc/apache2/mods-available/mpm_prefork.conf
 

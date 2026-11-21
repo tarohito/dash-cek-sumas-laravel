@@ -5,13 +5,19 @@ cd /var/www/html
 
 export PORT="${PORT:-10000}"
 
-# Auto-use Render's external HTTPS URL if APP_URL is not set yet
-if [ -z "${APP_URL:-}" ] && [ -n "${RENDER_EXTERNAL_URL:-}" ]; then
-    export APP_URL="${RENDER_EXTERNAL_URL}"
+# Auto-use platform external HTTPS URL if APP_URL is not set yet (Render / Railway)
+if [ -z "${APP_URL:-}" ]; then
+    if [ -n "${RENDER_EXTERNAL_URL:-}" ]; then
+        export APP_URL="${RENDER_EXTERNAL_URL}"
+    elif [ -n "${RAILWAY_PUBLIC_DOMAIN:-}" ]; then
+        export APP_URL="https://${RAILWAY_PUBLIC_DOMAIN}"
+    fi
 fi
 
-# Bind Apache to Render's dynamic $PORT
+# Bind Apache to platform dynamic $PORT and ensure ONLY mpm_prefork is active
 echo "Listen ${PORT}" > /etc/apache2/ports.conf
+rm -f /etc/apache2/mods-enabled/mpm_*.load /etc/apache2/mods-enabled/mpm_*.conf
+a2enmod mpm_prefork >/dev/null 2>&1 || true
 
 # Ensure runtime directories exist and are writable by Apache
 mkdir -p \
@@ -23,7 +29,7 @@ mkdir -p \
 
 # Auto-detect DB_CONNECTION if not explicitly provided
 if [ -z "${DB_CONNECTION:-}" ]; then
-    RAW_DB_URL="${DB_URL:-${DATABASE_URL:-}}"
+    RAW_DB_URL="${DB_URL:-${DATABASE_URL:-${MYSQL_URL:-}}}"
     if [[ "${RAW_DB_URL}" == postgres* ]]; then
         export DB_CONNECTION="pgsql"
     elif [[ "${RAW_DB_URL}" == mysql* ]] || [[ "${RAW_DB_URL}" == mariadb* ]]; then
@@ -45,7 +51,7 @@ fi
 
 # Provide a fallback APP_KEY if not configured yet so the app can boot cleanly
 if [ -z "${APP_KEY:-}" ]; then
-    echo "[Render Entrypoint] WARNING: APP_KEY is not set. Generating an ephemeral key for this boot. Set APP_KEY in Render Environment Variables for persistent sessions."
+    echo "[Entrypoint] WARNING: APP_KEY is not set. Generating an ephemeral key for this boot. Set APP_KEY in Environment Variables for persistent sessions."
     export APP_KEY="base64:$(php -r 'echo base64_encode(random_bytes(32));')"
 fi
 
@@ -57,7 +63,7 @@ php artisan migrate --force --no-interaction
 
 AUTO_SEED="${AUTO_SEED_IF_EMPTY:-true}"
 if [ "${RUN_SEEDER:-false}" = "true" ]; then
-    echo "[Render Entrypoint] RUN_SEEDER=true -> running SumasSeeder..."
+    echo "[Entrypoint] RUN_SEEDER=true -> running SumasSeeder..."
     php artisan db:seed --class=SumasSeeder --force --no-interaction
 elif [ "${AUTO_SEED}" = "true" ]; then
     USER_COUNT="$(php -r '
@@ -71,7 +77,7 @@ elif [ "${AUTO_SEED}" = "true" ]; then
         }
     ' 2>/dev/null || echo "-1")"
     if [ "${USER_COUNT}" = "0" ]; then
-        echo "[Render Entrypoint] Empty users table detected -> running SumasSeeder..."
+        echo "[Entrypoint] Empty users table detected -> running SumasSeeder..."
         php artisan db:seed --class=SumasSeeder --force --no-interaction
     fi
 fi
@@ -86,5 +92,5 @@ if [ "${DB_CONNECTION}" = "sqlite" ]; then
     chown -R www-data:www-data "$(dirname "${DB_DATABASE}")"
 fi
 
-echo "[Render Entrypoint] Starting Apache on port ${PORT} (DB_CONNECTION=${DB_CONNECTION})..."
+echo "[Entrypoint] Starting Apache on port ${PORT} (DB_CONNECTION=${DB_CONNECTION})..."
 exec apache2-foreground
