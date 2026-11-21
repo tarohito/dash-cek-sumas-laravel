@@ -5705,8 +5705,8 @@ export default function App() {
           {/* BRAND TABLE & CONTROLS (TERPADU DALAM SATU CARD SEPERTI TABEL SCAN) */}
           <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-2xl overflow-hidden shadow-xs">
             {/* Filter & Pencarian Bar */}
-            <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-zinc-800 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
-              <div className="relative flex-1 min-w-[240px]">
+            <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-zinc-800 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+              <div className="relative flex-1 min-w-0">
                 <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-zinc-500" />
                 <input
                   type="text"
@@ -6105,9 +6105,9 @@ export default function App() {
                 </button>
               ) : null
             ) : isAdminRole ? (
-              <div className="flex flex-wrap items-center gap-2.5 self-start sm:self-auto">
+              <div className="flex flex-wrap items-center justify-end gap-2.5 w-full sm:w-auto">
                 {rbacHasChanges && (
-                  <span className="text-xs text-amber-600 dark:text-amber-400 font-medium whitespace-nowrap">
+                  <span className="text-xs text-amber-600 dark:text-amber-400 font-medium whitespace-nowrap w-full sm:w-auto">
                     Belum disimpan
                   </span>
                 )}
@@ -6115,7 +6115,7 @@ export default function App() {
                   type="button"
                   onClick={handleResetRbacDefaults}
                   disabled={isSavingRbac || isRbacAtDefaults}
-                  className="h-10 px-5 rounded-full border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-slate-700 dark:text-zinc-200 hover:bg-slate-50 dark:hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed text-xs sm:text-sm font-semibold inline-flex items-center justify-center transition-all cursor-pointer whitespace-nowrap active:scale-95"
+                  className="flex-1 sm:flex-none h-10 px-4 sm:px-5 rounded-full border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-slate-700 dark:text-zinc-200 hover:bg-slate-50 dark:hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed text-xs sm:text-sm font-semibold inline-flex items-center justify-center transition-all cursor-pointer whitespace-nowrap active:scale-95"
                 >
                   <span>Reset Default</span>
                 </button>
@@ -6123,7 +6123,7 @@ export default function App() {
                   type="button"
                   onClick={handleSaveRbacMatrix}
                   disabled={!rbacHasChanges || isSavingRbac}
-                  className="h-10 px-5 rounded-full bg-[#c28e62] hover:bg-[#b07d53] disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs sm:text-sm font-semibold inline-flex items-center justify-center transition-all cursor-pointer whitespace-nowrap active:scale-95"
+                  className="flex-1 sm:flex-none h-10 px-4 sm:px-5 rounded-full bg-[#c28e62] hover:bg-[#b07d53] disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs sm:text-sm font-semibold inline-flex items-center justify-center transition-all cursor-pointer whitespace-nowrap active:scale-95"
                 >
                   <span>{isSavingRbac ? 'Menyimpan...' : 'Simpan Hak Akses'}</span>
                 </button>
@@ -6203,8 +6203,8 @@ export default function App() {
             ) : (
             <>
             {/* Filter & Pencarian Bar */}
-            <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-zinc-800 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
-              <div className="relative flex-1 min-w-[240px]">
+            <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-zinc-800 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+              <div className="relative flex-1 min-w-0">
                 <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-zinc-500" />
                 <input
                   type="text"
@@ -6615,8 +6615,8 @@ export default function App() {
           {/* SKU TABLE & CONTROLS (TERPADU DALAM SATU CARD SEPERTI TABEL SCAN) */}
           <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-2xl overflow-hidden shadow-xs">
             {/* Filter & Pencarian Bar */}
-            <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-zinc-800 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
-              <div className="relative flex-1 min-w-[240px]">
+            <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-zinc-800 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+              <div className="relative flex-1 min-w-0">
                 <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-zinc-500" />
                 <input
                   type="text"
@@ -7051,7 +7051,7 @@ export default function App() {
               </h2>
             </div>
 
-            <div className="flex items-center gap-2.5">
+            <div className="grid grid-cols-2 sm:flex items-center gap-2.5 w-full sm:w-auto">
               <button
                 type="button"
                 onClick={() => {
@@ -7059,7 +7059,7 @@ export default function App() {
                   triggerAlert('Diperbarui', 'Data telemetri pemindaian berhasil disinkronkan', 'success');
                 }}
                 disabled={isScanLoading}
-                className="w-full sm:w-auto h-10 px-5 rounded-full border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-slate-700 dark:text-zinc-200 hover:bg-slate-50 dark:hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed text-xs sm:text-sm font-semibold inline-flex items-center justify-center transition-all cursor-pointer whitespace-nowrap active:scale-95"
+                className="w-full sm:w-auto h-10 px-4 sm:px-5 rounded-full border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-slate-700 dark:text-zinc-200 hover:bg-slate-50 dark:hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed text-xs sm:text-sm font-semibold inline-flex items-center justify-center transition-all cursor-pointer whitespace-nowrap active:scale-95"
               >
                 <span>{isScanLoading ? 'Menyinkronkan...' : 'Segarkan Data'}</span>
               </button>
@@ -7070,7 +7070,7 @@ export default function App() {
                   if (!hasMapEverOpened) setHasMapEverOpened(true);
                   setIsScanMapOpen(!isScanMapOpen);
                 }}
-                className="w-full sm:w-auto h-10 px-5 rounded-full bg-[#c28e62] hover:bg-[#b07d53] text-white text-xs sm:text-sm font-semibold inline-flex items-center justify-center transition-all cursor-pointer whitespace-nowrap active:scale-95"
+                className="w-full sm:w-auto h-10 px-4 sm:px-5 rounded-full bg-[#c28e62] hover:bg-[#b07d53] text-white text-xs sm:text-sm font-semibold inline-flex items-center justify-center transition-all cursor-pointer whitespace-nowrap active:scale-95"
               >
                 <span>{isScanMapOpen ? 'Tutup Maps' : 'Buka Maps'}</span>
               </button>
@@ -7101,9 +7101,9 @@ export default function App() {
           {/* TABEL AKTIVITAS SCAN (KONSISTEN DENGAN TABEL LAIN) */}
           <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-700 rounded-2xl overflow-hidden shadow-xs">
             {/* Filter & Pencarian Bar (Konsisten & Minimalis tanpa judul redundant) */}
-            <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-zinc-800 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+            <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-zinc-800 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
               {/* Search Bar */}
-              <div className="relative flex-1 min-w-[240px]">
+              <div className="relative flex-1 min-w-0">
                 <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-zinc-500" />
                 <input
                   type="text"
@@ -7575,8 +7575,8 @@ export default function App() {
             {/* TABEL RIWAYAT BATCH (TERPADU DALAM SATU CARD SEPERTI TABEL SCAN) */}
             <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200 dark:border-zinc-700 overflow-hidden shadow-xs">
               {/* SEARCH & SORT BY CONTROLS (HEADER CARD) */}
-              <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-zinc-800 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
-                <div className="relative flex-1 min-w-[240px]">
+              <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-zinc-800 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
+                <div className="relative flex-1 min-w-0">
                   <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-zinc-500" />
                   <input
                     type="text"
@@ -7990,7 +7990,7 @@ export default function App() {
           onClick={(e) => { if (e.target === e.currentTarget) setIsCreateBatchModalOpen(false); }}
           className="fixed inset-0 bg-black/60 z-[10005] flex items-center justify-center p-3 sm:p-4 backdrop-blur-sm animate-in fade-in duration-200"
         >
-          <div className="bg-white dark:bg-zinc-900 rounded-2xl w-full max-w-xl max-h-[92vh] sm:max-h-[88vh] flex flex-col overflow-hidden border border-slate-200/90 dark:border-zinc-700/80 animate-in zoom-in-95 duration-200">
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl w-full max-w-xl max-h-[92dvh] sm:max-h-[88vh] flex flex-col overflow-hidden border border-slate-200/90 dark:border-zinc-700/80 animate-in zoom-in-95 duration-200">
             {/* MODAL HEADER */}
             <div className="px-5 sm:px-6 py-4 border-b border-slate-100 dark:border-zinc-800 flex items-center justify-between bg-slate-50/80 dark:bg-zinc-800/80 flex-shrink-0">
               <div className="flex items-center gap-3">
@@ -8210,7 +8210,7 @@ export default function App() {
           onClick={(e) => { if (e.target === e.currentTarget) setIsEditUrlModalOpen(false); }}
           className="fixed inset-0 bg-black/65 z-[10006] flex items-center justify-center p-3 sm:p-4 backdrop-blur-sm animate-in fade-in duration-200"
         >
-          <div className="bg-white dark:bg-zinc-900 rounded-2xl w-full max-w-xl max-h-[92vh] sm:max-h-[90vh] flex flex-col overflow-hidden border border-slate-200/90 dark:border-zinc-700/80 animate-in zoom-in-95 duration-200">
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl w-full max-w-xl max-h-[92dvh] sm:max-h-[90dvh] flex flex-col overflow-hidden border border-slate-200/90 dark:border-zinc-700/80 animate-in zoom-in-95 duration-200">
             {/* MODAL HEADER */}
             <div className="px-5 sm:px-6 py-4 border-b border-slate-100 dark:border-zinc-800 flex items-center justify-between bg-slate-50/80 dark:bg-zinc-800/80 flex-shrink-0">
               <div className="flex items-center gap-3">
@@ -8292,7 +8292,7 @@ export default function App() {
           onClick={(e) => { if (e.target === e.currentTarget) setIsEditProjectModalOpen(false); }}
           className="fixed inset-0 bg-black/65 z-[10006] flex items-center justify-center p-3 sm:p-4 backdrop-blur-sm animate-in fade-in duration-200"
         >
-          <div className="bg-white dark:bg-zinc-900 rounded-2xl w-full max-w-2xl max-h-[92vh] sm:max-h-[90vh] flex flex-col overflow-hidden border border-slate-200/90 dark:border-zinc-700/80 animate-in zoom-in-95 duration-200">
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl w-full max-w-2xl max-h-[92dvh] sm:max-h-[90dvh] flex flex-col overflow-hidden border border-slate-200/90 dark:border-zinc-700/80 animate-in zoom-in-95 duration-200">
             {/* MODAL HEADER */}
             <div className="px-5 sm:px-6 py-4 border-b border-slate-100 dark:border-zinc-800 flex items-center justify-between bg-slate-50/80 dark:bg-zinc-800/80 flex-shrink-0">
               <div className="flex items-center gap-3">
@@ -8527,7 +8527,7 @@ export default function App() {
           onClick={(e) => { if (e.target === e.currentTarget) setIsAllocateModalOpen(false); }}
           className="fixed inset-0 bg-black/60 z-[10005] flex items-center justify-center p-3 sm:p-4 backdrop-blur-sm animate-in fade-in duration-200"
         >
-          <div className="bg-white dark:bg-zinc-900 rounded-2xl w-full max-w-xl max-h-[92vh] sm:max-h-[88vh] flex flex-col overflow-hidden mx-4 border border-slate-200/90 dark:border-zinc-700/80 animate-in zoom-in-95 duration-200">
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl w-full max-w-xl max-h-[92dvh] sm:max-h-[88vh] flex flex-col overflow-hidden border border-slate-200/90 dark:border-zinc-700/80 animate-in zoom-in-95 duration-200">
             {/* MODAL HEADER */}
             <div className="px-5 sm:px-6 py-4 border-b border-slate-100 dark:border-zinc-800 flex items-center justify-between bg-slate-50/80 dark:bg-zinc-800/80 flex-shrink-0">
               <div className="flex items-center gap-3">
@@ -8670,12 +8670,12 @@ export default function App() {
           onClick={(e) => { if (e.target === e.currentTarget) { closeDetailModal(); } }}
           className="fixed inset-0 bg-black/50 z-[10000] flex items-center justify-center p-2 sm:p-4 backdrop-blur-sm animate-in fade-in duration-200"
         >
-          <div className="bg-white dark:bg-zinc-900 rounded-2xl w-full max-w-4xl lg:max-w-5xl overflow-hidden flex flex-col max-h-[90vh] mx-1 sm:mx-4 border border-slate-200/90 dark:border-zinc-700/80 animate-in zoom-in-95 duration-200">
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl w-full max-w-4xl lg:max-w-5xl overflow-hidden flex flex-col max-h-[90dvh] border border-slate-200/90 dark:border-zinc-700/80 animate-in zoom-in-95 duration-200">
             
             <div className="pt-3.5 sm:pt-4 px-4 sm:px-6 border-b border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800 flex-shrink-0">
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center gap-2.5 flex-wrap">
-                  <Layers size={18} className="text-[#c28e62]" />
+              <div className="flex items-center justify-between mb-3.5 sm:mb-4 gap-2">
+                <div className="flex items-center gap-2 sm:gap-2.5 flex-wrap min-w-0">
+                  <Layers size={18} className="text-[#c28e62] shrink-0" />
                   <h3 className="text-sm sm:text-base font-bold tracking-tight text-slate-800 dark:text-zinc-100 leading-snug">Detail Batch ID</h3>
                   <button
                     type="button"
@@ -8704,37 +8704,42 @@ export default function App() {
                     )}
                   </button>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 shrink-0">
                   <button 
+                    type="button"
+                    aria-label="Tutup modal detail batch"
                     onClick={closeDetailModal} 
                     data-tooltip="Tutup" data-tooltip-shortcut="Esc" data-tooltip-pos="bottom" 
-                    className="text-slate-400 dark:text-zinc-500 hover:text-slate-600 dark:hover:text-zinc-300 bg-white dark:bg-zinc-900 rounded-full p-1.5 border border-slate-200 dark:border-zinc-600 cursor-pointer"
+                    className="text-slate-400 dark:text-zinc-500 hover:text-slate-600 dark:hover:text-zinc-300 bg-white dark:bg-zinc-900 rounded-full p-2 border border-slate-200 dark:border-zinc-600 cursor-pointer"
                   >
                     <X size={16} />
                   </button>
                 </div>
               </div>
 
-              <div className="flex gap-4 sm:gap-6 text-xs sm:text-sm font-medium -mb-[1px] overflow-x-auto">
+              <div className="flex gap-4 sm:gap-6 text-xs sm:text-sm font-medium -mb-[1px] overflow-x-auto no-scrollbar">
                 <button 
+                  type="button"
                   onClick={() => { setActiveTab('tags'); setHoveredTagInfo(null); }}
-                  className={`pb-3 px-1 border-b-2 transition-colors whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${activeTab === 'tags' ? 'border-[#c28e62] text-[#c28e62] font-bold' : 'border-transparent text-slate-500 dark:text-zinc-400 hover:text-slate-700 dark:hover:text-zinc-200'}`}
+                  className={`pb-3 px-1 border-b-2 transition-colors whitespace-nowrap shrink-0 cursor-pointer flex items-center gap-1.5 ${activeTab === 'tags' ? 'border-[#c28e62] text-[#c28e62] font-bold' : 'border-transparent text-slate-500 dark:text-zinc-400 hover:text-slate-700 dark:hover:text-zinc-200'}`}
                 >
                   <QrCode size={15} />
                   <span>Daftar Tag ({(tagsTotalCount || activeBatch?.actualTagCount || activeBatch?.qty || currentTags.length).toLocaleString('id-ID')})</span>
                 </button>
                 {isB2BBatch(activeBatch) && (
                   <button 
+                    type="button"
                     onClick={() => { setActiveTab('projects'); setHoveredTagInfo(null); }}
-                    className={`pb-3 px-1 border-b-2 transition-colors whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${activeTab === 'projects' ? 'border-[#c28e62] text-[#c28e62] font-bold' : 'border-transparent text-slate-500 dark:text-zinc-400 hover:text-slate-700 dark:hover:text-zinc-200'}`}
+                    className={`pb-3 px-1 border-b-2 transition-colors whitespace-nowrap shrink-0 cursor-pointer flex items-center gap-1.5 ${activeTab === 'projects' ? 'border-[#c28e62] text-[#c28e62] font-bold' : 'border-transparent text-slate-500 dark:text-zinc-400 hover:text-slate-700 dark:hover:text-zinc-200'}`}
                   >
                     <Building2 size={15} />
                     <span>Alokasi Proyek ({activeBatchProjects.length})</span>
                   </button>
                 )}
                 <button 
+                  type="button"
                   onClick={() => { setActiveTab('history'); setHoveredTagInfo(null); }}
-                  className={`pb-3 px-1 border-b-2 transition-colors whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${activeTab === 'history' ? 'border-[#c28e62] text-[#c28e62] font-bold' : 'border-transparent text-slate-500 dark:text-zinc-400 hover:text-slate-700 dark:hover:text-zinc-200'}`}
+                  className={`pb-3 px-1 border-b-2 transition-colors whitespace-nowrap shrink-0 cursor-pointer flex items-center gap-1.5 ${activeTab === 'history' ? 'border-[#c28e62] text-[#c28e62] font-bold' : 'border-transparent text-slate-500 dark:text-zinc-400 hover:text-slate-700 dark:hover:text-zinc-200'}`}
                 >
                   <Clock size={15} />
                   <span>Riwayat Perubahan</span>
@@ -8747,7 +8752,7 @@ export default function App() {
               {(() => {
                 const isB2B = isB2BBatch(activeBatch);
                 return (
-                  <div className="bg-slate-50 dark:bg-zinc-800 p-3.5 sm:p-4 rounded-2xl border border-slate-100 dark:border-zinc-700 mb-3 flex flex-wrap items-center gap-x-6 sm:gap-x-8 lg:gap-x-10 gap-y-3.5 flex-shrink-0 text-xs sm:text-sm">
+                  <div className="bg-slate-50 dark:bg-zinc-800 p-3.5 sm:p-4 rounded-2xl border border-slate-100 dark:border-zinc-700 mb-3 flex flex-wrap items-center gap-x-5 sm:gap-x-8 lg:gap-x-10 gap-y-3 flex-shrink-0 text-xs sm:text-sm">
                     {/* BATCH ID */}
                     <div className="shrink-0 w-auto">
                       <span className="text-slate-400 dark:text-zinc-500 block text-[10px] uppercase font-semibold tracking-wider">Batch ID</span>
@@ -8755,9 +8760,9 @@ export default function App() {
                     </div>
 
                     {/* BRAND & SKU */}
-                    <div className="shrink-0 w-auto">
+                    <div className="min-w-0">
                       <span className="text-slate-400 dark:text-zinc-500 block text-[10px] uppercase font-semibold tracking-wider">Brand &amp; SKU</span>
-                      <div className="flex items-center gap-1.5 mt-0.5 whitespace-nowrap">
+                      <div className="flex flex-wrap items-center gap-1.5 mt-0.5">
                         <button
                           type="button"
                           onClick={() => {
@@ -9648,7 +9653,7 @@ export default function App() {
           onClick={(e) => { if (e.target === e.currentTarget) setIsSuspendModalOpen(false); }}
           className="fixed inset-0 bg-black/50 z-[10050] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200"
         >
-          <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200/90 dark:border-zinc-700/80 w-full max-w-md max-h-[92vh] sm:max-h-[88vh] flex flex-col overflow-hidden mx-4 animate-in zoom-in-95 duration-200">
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200/90 dark:border-zinc-700/80 w-full max-w-md max-h-[92dvh] sm:max-h-[88vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
             {/* MODAL HEADER */}
             <div className="px-5 sm:px-6 py-4 border-b border-slate-100 dark:border-zinc-800 flex items-center justify-between bg-slate-50/80 dark:bg-zinc-800/80 flex-shrink-0">
               <div className="flex items-center gap-3">
@@ -9714,7 +9719,7 @@ export default function App() {
           onClick={(e) => { if (e.target === e.currentTarget) setIsUnsuspendModalOpen(false); }}
           className="fixed inset-0 bg-black/60 z-[10050] flex items-center justify-center p-3 sm:p-4 backdrop-blur-sm animate-in fade-in duration-200"
         >
-          <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200/90 dark:border-zinc-700/80 w-full max-w-md max-h-[92vh] sm:max-h-[88vh] flex flex-col overflow-hidden mx-4 animate-in zoom-in-95 duration-200">
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200/90 dark:border-zinc-700/80 w-full max-w-md max-h-[92dvh] sm:max-h-[88vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
             {/* MODAL HEADER */}
             <div className="px-5 sm:px-6 py-4 border-b border-slate-100 dark:border-zinc-800 flex items-center justify-between bg-slate-50/80 dark:bg-zinc-800/80 flex-shrink-0">
               <div className="flex items-center gap-3">
@@ -9780,7 +9785,7 @@ export default function App() {
           onClick={(e) => { if (e.target === e.currentTarget) setIsDownloadModalOpen(false); }}
           className="fixed inset-0 bg-black/50 z-[10000] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200"
         >
-          <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200 dark:border-zinc-700 w-full max-w-lg overflow-hidden mx-4">
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200 dark:border-zinc-700 w-full max-w-lg overflow-hidden">
             <div className="px-5 py-4 border-b border-slate-100 dark:border-zinc-800 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-lg bg-[#c28e62]/10 dark:bg-zinc-800 flex items-center justify-center text-[#c28e62]">
@@ -9994,7 +9999,7 @@ export default function App() {
           }}
           className="fixed inset-0 bg-black/60 z-[10005] flex items-center justify-center p-3 sm:p-4 backdrop-blur-sm animate-in fade-in duration-200"
         >
-          <div className="bg-white dark:bg-zinc-900 rounded-2xl w-full max-w-xl max-h-[92vh] sm:max-h-[88vh] flex flex-col overflow-hidden border border-slate-200/90 dark:border-zinc-700/80 animate-in zoom-in-95 duration-200">
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl w-full max-w-xl max-h-[92dvh] sm:max-h-[88vh] flex flex-col overflow-hidden border border-slate-200/90 dark:border-zinc-700/80 animate-in zoom-in-95 duration-200">
             {/* MODAL HEADER */}
             <div className="px-5 sm:px-6 py-4 border-b border-slate-100 dark:border-zinc-800 flex items-center justify-between bg-slate-50/80 dark:bg-zinc-800/80 flex-shrink-0">
               <div className="flex items-center gap-3">
@@ -10226,7 +10231,7 @@ export default function App() {
           }}
           className="fixed inset-0 bg-black/60 z-[10010] flex items-center justify-center p-3 sm:p-4 backdrop-blur-sm animate-in fade-in duration-200"
         >
-          <div className="bg-white dark:bg-zinc-900 rounded-2xl w-full max-w-2xl max-h-[92vh] sm:max-h-[88vh] flex flex-col overflow-hidden border border-slate-200/90 dark:border-zinc-700/80 animate-in zoom-in-95 duration-200">
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl w-full max-w-2xl max-h-[92dvh] sm:max-h-[88vh] flex flex-col overflow-hidden border border-slate-200/90 dark:border-zinc-700/80 animate-in zoom-in-95 duration-200">
             {/* MODAL HEADER */}
             <div className="px-5 sm:px-6 py-4 border-b border-slate-100 dark:border-zinc-800 flex items-center justify-between flex-shrink-0">
               <div className="flex items-center gap-2.5">
@@ -10746,7 +10751,7 @@ export default function App() {
           onClick={(e) => { if (e.target === e.currentTarget) { setIsDetailUserModalOpen(false); setUserToView(null); setIsUserBrandsExpanded(false); setIsUserProductsExpanded(false); } }}
           className="fixed inset-0 bg-black/60 z-[10005] flex items-center justify-center p-3 sm:p-4 backdrop-blur-sm animate-in fade-in duration-200"
         >
-          <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200 dark:border-zinc-800 w-full max-w-3xl overflow-hidden mx-4 animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh] shadow-2xl">
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200 dark:border-zinc-800 w-full max-w-3xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90dvh] shadow-2xl">
             {/* HEADER MODAL: CUKUP ICON DAN JUDUL MODAL TANPA SUBTITLE */}
             <div className="px-6 py-4 border-b border-slate-100 dark:border-zinc-800 flex items-center justify-between shrink-0 bg-slate-50/50 dark:bg-zinc-800/30">
               <div className="flex items-center gap-3">
@@ -11261,7 +11266,7 @@ export default function App() {
           onClick={(e) => { if (e.target === e.currentTarget) setIsAddUserModalOpen(false); }}
           className="fixed inset-0 bg-black/60 z-[10010] flex items-center justify-center p-3 sm:p-4 backdrop-blur-sm animate-in fade-in duration-200"
         >
-          <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200/90 dark:border-zinc-700/80 w-full max-w-xl max-h-[92vh] sm:max-h-[88vh] overflow-hidden mx-4 animate-in zoom-in-95 duration-200 flex flex-col">
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200/90 dark:border-zinc-700/80 w-full max-w-xl max-h-[92dvh] sm:max-h-[88vh] overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col">
             {/* MODAL HEADER */}
             <div className="px-5 sm:px-6 py-4 border-b border-slate-100 dark:border-zinc-800 flex items-center justify-between bg-slate-50/80 dark:bg-zinc-800/80 flex-shrink-0">
               <div className="flex items-center gap-3">
@@ -11498,7 +11503,7 @@ export default function App() {
           onClick={(e) => { if (e.target === e.currentTarget) { setIsDetailBrandModalOpen(false); setBrandToView(null); setIsBrandProductsExpanded(false); } }}
           className="fixed inset-0 bg-black/60 z-[10005] flex items-center justify-center p-3 sm:p-4 backdrop-blur-sm animate-in fade-in duration-200"
         >
-          <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200 dark:border-zinc-800 w-full max-w-3xl overflow-hidden mx-4 animate-in zoom-in-95 duration-200 flex flex-col max-h-[90vh] shadow-2xl">
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200 dark:border-zinc-800 w-full max-w-3xl overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[90dvh] shadow-2xl">
             {/* HEADER MODAL: CUKUP ICON DAN JUDUL MODAL TANPA SUBTITLE */}
             <div className="px-6 py-4 border-b border-slate-100 dark:border-zinc-800 flex items-center justify-between shrink-0 bg-slate-50/50 dark:bg-zinc-800/30">
               <div className="flex items-center gap-3">
@@ -12246,7 +12251,7 @@ export default function App() {
           }}
           className="fixed inset-0 bg-black/60 z-[10005] flex items-center justify-center p-3 sm:p-4 backdrop-blur-sm animate-in fade-in duration-200"
         >
-          <div className="bg-white dark:bg-zinc-900 rounded-2xl w-full max-w-lg max-h-[92vh] flex flex-col overflow-hidden border border-slate-200/90 dark:border-zinc-700/80 animate-in zoom-in-95 duration-200">
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl w-full max-w-lg max-h-[92dvh] flex flex-col overflow-hidden border border-slate-200/90 dark:border-zinc-700/80 animate-in zoom-in-95 duration-200">
             {/* MODAL HEADER */}
             <div className="px-5 sm:px-6 py-4 border-b border-slate-100 dark:border-zinc-800 flex items-center justify-between bg-slate-50/80 dark:bg-zinc-800/80 flex-shrink-0">
               <div className="flex items-center gap-3">
@@ -12425,7 +12430,7 @@ export default function App() {
           }}
           className="fixed inset-0 bg-black/50 z-[10005] flex items-center justify-center p-4 sm:p-6 backdrop-blur-xs animate-in fade-in duration-150"
         >
-          <div className="bg-white dark:bg-zinc-900 rounded-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden border border-slate-200 dark:border-zinc-800 shadow-2xl">
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl w-full max-w-4xl max-h-[90dvh] flex flex-col overflow-hidden border border-slate-200 dark:border-zinc-800 shadow-2xl">
             {(() => {
               // Real relational data from database tables or fallback
               const prod = skuRelationalData?.product || skuToView;

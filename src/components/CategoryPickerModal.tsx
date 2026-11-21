@@ -160,15 +160,15 @@ export const CategoryPickerModal: React.FC<CategoryPickerModalProps> = ({
 
   return createPortal(
     <div 
-      className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 md:p-6 animate-in fade-in duration-200"
+      className="fixed inset-0 z-[10010] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-2.5 sm:p-5 md:p-6 animate-in fade-in duration-200"
       onClick={onClose}
     >
       <div 
-        className="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200 dark:border-zinc-800 w-full max-w-5xl h-[88vh] max-h-[860px] min-h-[480px] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
+        className="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200 dark:border-zinc-800 w-full max-w-5xl h-[90dvh] sm:h-[88dvh] max-h-[860px] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         {/* HEADER MODAL */}
-        <div className="px-5 sm:px-6 py-3.5 border-b border-slate-100 dark:border-zinc-800 flex items-center justify-between gap-4 bg-slate-50/50 dark:bg-zinc-800/30 shrink-0">
+        <div className="px-4 sm:px-6 py-3.5 border-b border-slate-100 dark:border-zinc-800 flex items-center justify-between gap-3 bg-slate-50/50 dark:bg-zinc-800/30 shrink-0">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-[#c28e62]/10 text-[#c28e62] flex items-center justify-center shrink-0">
               <Layers size={18} />
@@ -189,7 +189,7 @@ export const CategoryPickerModal: React.FC<CategoryPickerModalProps> = ({
         </div>
 
         {/* SEARCH BAR CEPAT */}
-        <div className="px-5 sm:px-6 py-2.5 border-b border-slate-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 shrink-0">
+        <div className="px-4 sm:px-6 py-2.5 border-b border-slate-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 shrink-0">
           <div className="relative">
             <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 dark:text-zinc-500" />
             <input
@@ -213,10 +213,10 @@ export const CategoryPickerModal: React.FC<CategoryPickerModalProps> = ({
         </div>
 
         {/* 3 KOLOM LAYOUT: DINAMIS MENYESUAIKAN TINGGI LAYAR */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4 p-4 sm:p-5 flex-1 min-h-0 overflow-y-auto md:overflow-hidden bg-slate-50/50 dark:bg-zinc-950/40">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 sm:gap-4 p-3.5 sm:p-5 flex-1 min-h-0 overflow-y-auto lg:overflow-hidden bg-slate-50/50 dark:bg-zinc-950/40">
           
           {/* KOLOM 1: KATEGORI UTAMA (LEVEL 1) */}
-          <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-2xl overflow-hidden flex flex-col h-[300px] md:h-full min-h-0 shadow-2xs">
+          <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-2xl overflow-hidden flex flex-col h-[230px] sm:h-[260px] lg:h-full min-h-0 shadow-2xs">
             <div className="p-3 border-b border-slate-100 dark:border-zinc-800 bg-slate-50/80 dark:bg-zinc-800/40 flex items-center justify-between shrink-0">
               <h3 className="font-bold text-xs text-slate-800 dark:text-zinc-100 uppercase tracking-wider">
                 Kategori Utama
@@ -269,7 +269,7 @@ export const CategoryPickerModal: React.FC<CategoryPickerModalProps> = ({
           </div>
 
           {/* KOLOM 2: SUB KATEGORI (LEVEL 2) */}
-          <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-2xl overflow-hidden flex flex-col h-[300px] md:h-full min-h-0 shadow-2xs">
+          <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-2xl overflow-hidden flex flex-col h-[230px] sm:h-[260px] lg:h-full min-h-0 shadow-2xs">
             <div className="p-3 border-b border-slate-100 dark:border-zinc-800 bg-slate-50/80 dark:bg-zinc-800/40 flex items-center justify-between shrink-0">
               <h3 className="font-bold text-xs text-slate-800 dark:text-zinc-100 uppercase tracking-wider">
                 Sub Kategori
@@ -326,7 +326,7 @@ export const CategoryPickerModal: React.FC<CategoryPickerModalProps> = ({
           </div>
 
           {/* KOLOM 3: VARIAN / JENIS PRODUK (LEVEL 3) */}
-          <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-2xl overflow-hidden flex flex-col h-[300px] md:h-full min-h-0 shadow-2xs">
+          <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-2xl overflow-hidden flex flex-col h-[230px] sm:h-[260px] lg:h-full min-h-0 shadow-2xs">
             <div className="p-3 border-b border-slate-100 dark:border-zinc-800 bg-slate-50/80 dark:bg-zinc-800/40 flex items-center justify-between shrink-0">
               <h3 className="font-bold text-xs text-slate-800 dark:text-zinc-100 uppercase tracking-wider">
                 Varian / Jenis
@@ -388,7 +388,7 @@ export const CategoryPickerModal: React.FC<CategoryPickerModalProps> = ({
         </div>
 
         {/* FOOTER: BREADCRUMB PREVIEW & AKSI KONFIRMASI */}
-        <div className="px-5 sm:px-6 py-3.5 border-t border-slate-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
+        <div className="px-4 sm:px-6 py-3.5 border-t border-slate-100 dark:border-zinc-800 bg-white dark:bg-zinc-900 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
           <div className="min-w-0">
             <span className="text-[11px] font-semibold text-slate-400 dark:text-zinc-500 uppercase tracking-wider block mb-0.5">
               Struktur Kategori Terpilih:
@@ -416,7 +416,7 @@ export const CategoryPickerModal: React.FC<CategoryPickerModalProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5 sm:self-center shrink-0">
+          <div className="grid grid-cols-2 sm:flex items-center gap-2.5 w-full sm:w-auto sm:self-center shrink-0">
             <button
               type="button"
               onClick={onClose}

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Bell,
@@ -86,13 +86,23 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
   onOpenSecondaryPage,
   secondaryPageLabel,
 }) => {
+  const [viewportWidth, setViewportWidth] = useState<number>(() =>
+    typeof window !== 'undefined' ? window.innerWidth : 1024
+  );
+
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
+    const handleResize = () => setViewportWidth(window.innerWidth);
+    handleResize();
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('resize', handleResize);
+    };
   }, [isOpen, onClose]);
 
   if (!isOpen) return null;
@@ -118,26 +128,35 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
 
   const cleanSecondaryLabel = secondaryPageLabel.replace(/\s*→\s*$/, '').trim();
 
-  const safeTop = Math.max(12, Math.min(notifPos.top, window.innerHeight - 260));
-  const safeRight = Math.max(12, notifPos.right);
+  const isCompactMobile = viewportWidth < 640;
+  const panelWidth = Math.min(420, viewportWidth - 24);
+  const safeTop = Math.max(12, Math.min(notifPos.top, window.innerHeight - 240));
+  const safeRight = isCompactMobile
+    ? 12
+    : Math.max(12, Math.min(notifPos.right, viewportWidth - panelWidth - 12));
 
   return createPortal(
     <>
-      <div className="fixed inset-0 z-[99998]" onClick={onClose} />
+      <div
+        className="fixed inset-0 z-[99998] bg-slate-900/25 dark:bg-black/45 sm:bg-transparent sm:dark:bg-transparent backdrop-blur-[1px] sm:backdrop-blur-none"
+        onClick={onClose}
+      />
       <div
         role="dialog"
         aria-label="Panel Notifikasi"
-        className="fixed z-[99999] w-[356px] min-[440px]:w-[396px] sm:w-[420px] max-w-[calc(100vw-24px)] bg-white dark:bg-zinc-900 rounded-xl border border-slate-200 dark:border-zinc-800 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150"
+        className="fixed z-[99999] bg-white dark:bg-zinc-900 rounded-2xl sm:rounded-xl border border-slate-200 dark:border-zinc-800 overflow-hidden flex flex-col animate-in fade-in zoom-in-95 duration-150"
         style={{
           top: safeTop,
-          right: safeRight,
-          maxHeight: `min(560px, calc(100dvh - ${safeTop + 16}px))`,
+          ...(isCompactMobile
+            ? { left: 12, right: 12 }
+            : { right: safeRight, width: panelWidth }),
+          maxHeight: `min(560px, calc(100dvh - ${safeTop + 12}px))`,
         }}
       >
         {/* HEADER */}
-        <div className="px-4 pt-3.5 pb-2.5 flex items-start justify-between gap-3 flex-shrink-0">
-          <div className="min-w-0">
-            <div className="flex items-baseline gap-2 min-w-0">
+        <div className="px-3.5 sm:px-4 pt-3.5 pb-2.5 flex items-start justify-between gap-2 sm:gap-3 flex-shrink-0">
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 min-w-0">
               <h3 className="text-[15px] font-semibold tracking-tight text-slate-900 dark:text-zinc-100 leading-none">
                 Notifikasi
               </h3>
@@ -157,26 +176,27 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
               <button
                 type="button"
                 onClick={onMarkAllRead}
-                className="h-7 px-2 rounded-lg text-[11px] font-medium text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-100 hover:bg-slate-100 dark:hover:bg-zinc-800 inline-flex items-center gap-1 transition-colors cursor-pointer whitespace-nowrap"
+                className="h-8 sm:h-7 px-2 rounded-lg text-[11px] font-medium text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-100 hover:bg-slate-100 dark:hover:bg-zinc-800 inline-flex items-center gap-1 transition-colors cursor-pointer whitespace-nowrap"
                 title="Tandai semua sudah dibaca"
+                aria-label="Tandai semua sudah dibaca"
               >
-                <CheckCheck size={13} />
-                <span>Tandai semua</span>
+                <CheckCheck size={14} className="shrink-0" />
+                <span className="hidden min-[380px]:inline">Tandai semua</span>
               </button>
             )}
             <button
               type="button"
               onClick={onClose}
-              className="w-7 h-7 rounded-lg text-slate-400 dark:text-zinc-500 hover:text-slate-700 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800 inline-flex items-center justify-center transition-colors cursor-pointer"
+              className="w-8 h-8 sm:w-7 sm:h-7 rounded-lg text-slate-400 dark:text-zinc-500 hover:text-slate-700 dark:hover:text-zinc-200 hover:bg-slate-100 dark:hover:bg-zinc-800 inline-flex items-center justify-center transition-colors cursor-pointer"
               aria-label="Tutup panel notifikasi"
             >
-              <X size={15} />
+              <X size={16} />
             </button>
           </div>
         </div>
 
         {/* UNDERLINE CATEGORY TABS */}
-        <div className="px-4 border-b border-slate-100 dark:border-zinc-800 flex items-center gap-4 overflow-x-auto no-scrollbar flex-shrink-0">
+        <div className="px-3.5 sm:px-4 border-b border-slate-100 dark:border-zinc-800 flex items-center gap-3.5 sm:gap-4 overflow-x-auto no-scrollbar flex-shrink-0">
           {tabs.map((tab) => {
             const isActive = activeCategory === tab.id;
             return (
@@ -435,7 +455,7 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
                             </div>
 
                             {item.status === 'Menunggu' && canManageUsers && (
-                              <div className="flex items-center gap-2">
+                              <div className="flex flex-wrap items-center gap-2">
                                 <button
                                   type="button"
                                   disabled={processingResetId === item.sourceId}
@@ -443,7 +463,7 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
                                     e.stopPropagation();
                                     onRespondPasswordReset(item.sourceId, 'approve', item);
                                   }}
-                                  className="h-7 px-3 rounded-lg text-[11px] font-semibold text-white bg-[#c28e62] hover:bg-[#b07d53] disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center transition-colors cursor-pointer whitespace-nowrap"
+                                  className="h-8 sm:h-7 px-3 rounded-lg text-[11px] font-semibold text-white bg-[#c28e62] hover:bg-[#b07d53] disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center transition-colors cursor-pointer whitespace-nowrap"
                                 >
                                   {processingResetId === item.sourceId
                                     ? 'Memproses...'
@@ -456,7 +476,7 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
                                     e.stopPropagation();
                                     onRespondPasswordReset(item.sourceId, 'reject', item);
                                   }}
-                                  className="h-7 px-2.5 rounded-lg text-[11px] font-medium border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-slate-600 dark:text-zinc-300 hover:text-rose-600 dark:hover:text-rose-400 hover:border-rose-200 dark:hover:border-rose-900/60 hover:bg-rose-50/50 dark:hover:bg-rose-950/30 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center transition-colors cursor-pointer whitespace-nowrap"
+                                  className="h-8 sm:h-7 px-2.5 rounded-lg text-[11px] font-medium border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-slate-600 dark:text-zinc-300 hover:text-rose-600 dark:hover:text-rose-400 hover:border-rose-200 dark:hover:border-rose-900/60 hover:bg-rose-50/50 dark:hover:bg-rose-950/30 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center justify-center transition-colors cursor-pointer whitespace-nowrap"
                                 >
                                   Tolak
                                 </button>
@@ -467,8 +487,8 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
 
                         {/* SCAN METADATA FOOTER */}
                         {isScan && (
-                          <div className="mt-2 flex items-center justify-between gap-2 text-[11px]">
-                            <span className="text-slate-400 dark:text-zinc-500 font-mono text-[10px] truncate">
+                          <div className="mt-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-[11px]">
+                            <span className="text-slate-400 dark:text-zinc-500 font-mono text-[10px] truncate min-w-0">
                               {item.brand ? `${item.brand} · ` : ''}
                               {item.deviceInfo || 'Mobile Scanner'}
                             </span>
@@ -481,8 +501,8 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
 
                         {/* EDIT METADATA FOOTER */}
                         {isEdit && (
-                          <div className="mt-2 flex items-center justify-between gap-2 text-[11px]">
-                            <span className="text-slate-400 dark:text-zinc-500 truncate">
+                          <div className="mt-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-[11px]">
+                            <span className="text-slate-400 dark:text-zinc-500 truncate min-w-0">
                               {item.batchId ? (
                                 <>
                                   Batch{' '}
@@ -512,7 +532,7 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
                   type="button"
                   disabled={isLoadingMore}
                   onClick={onLoadMore}
-                  className="w-full py-2.5 text-xs font-medium text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-100 hover:bg-slate-50 dark:hover:bg-zinc-800/50 inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                  className="w-full py-3 sm:py-2.5 text-xs font-medium text-slate-500 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-100 hover:bg-slate-50 dark:hover:bg-zinc-800/50 inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
                 >
                   {isLoadingMore ? (
                     <>
@@ -532,7 +552,7 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
         </div>
 
         {/* FOOTER NAVIGATION */}
-        <div className="px-4 py-2.5 bg-slate-50/70 dark:bg-zinc-900 border-t border-slate-100 dark:border-zinc-800 flex items-center justify-between gap-3 text-xs flex-shrink-0">
+        <div className="px-3.5 sm:px-4 py-3 sm:py-2.5 bg-slate-50/70 dark:bg-zinc-900 border-t border-slate-100 dark:border-zinc-800 flex flex-wrap items-center justify-between gap-2 text-xs flex-shrink-0">
           <button
             type="button"
             onClick={onOpenScanPage}

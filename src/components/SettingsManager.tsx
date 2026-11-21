@@ -1157,7 +1157,7 @@ export const SettingsManager: React.FC<SettingsManagerProps> = ({
 
         {/* MODAL KONFIRMASI RESTORE */}
         {isRestoreModalOpen && restoreFile && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 dark:bg-black/80 backdrop-blur-xs">
+          <div className="fixed inset-0 z-[10010] flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 dark:bg-black/80 backdrop-blur-xs">
             <div className="bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800 rounded-2xl w-full max-w-md p-5 space-y-4">
               <div className="space-y-1.5">
                 <h4 className="text-base font-bold tracking-tight text-slate-800 dark:text-zinc-100 leading-snug">

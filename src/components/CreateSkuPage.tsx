@@ -490,14 +490,14 @@ export const CreateSkuPage: React.FC<CreateSkuPageProps> = ({
       {/* FULL-WIDTH STICKY SUB-HEADER: MENYATU SEPENUHNYA DI BAWAH HEADER SAAT DI-SCROLL */}
       {/* ========================================================================= */}
       <div className="sticky top-0 z-30 w-full bg-white/95 dark:bg-zinc-900/95 backdrop-blur-md border-b border-slate-200 dark:border-zinc-800 shadow-xs">
-        <div className="w-full max-w-[1720px] mx-auto px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between gap-3">
+        <div className="w-full max-w-[1720px] mx-auto px-3.5 sm:px-6 lg:px-8 md:h-14 flex flex-col md:flex-row md:items-center md:justify-between md:gap-3">
           
           {/* SISI KIRI: 3 MENU ANCHOR NAVIGASI (DENGAN GARIS WARNA DI BAWAH SAAT AKTIF) */}
-          <div className="flex items-center gap-1 sm:gap-3 overflow-x-auto scrollbar-none flex-1 min-w-0 h-full">
+          <div className="flex items-center gap-1 sm:gap-3 overflow-x-auto scrollbar-none flex-1 min-w-0 h-11 md:h-full border-b border-slate-100 dark:border-zinc-800 md:border-b-0 -mx-3.5 px-3.5 sm:-mx-6 sm:px-6 md:mx-0 md:px-0">
             <button
               type="button"
               onClick={() => scrollToSection('informasi')}
-              className={`h-full px-3 sm:px-4 text-xs sm:text-sm font-semibold transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 border-b-2 ${
+              className={`h-full px-3 sm:px-4 text-xs sm:text-sm font-semibold transition-all cursor-pointer whitespace-nowrap shrink-0 flex items-center gap-2 border-b-2 ${
                 activeSection === 'informasi'
                   ? 'border-[#c28e62] text-[#c28e62] font-bold'
                   : 'border-transparent text-slate-500 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-zinc-200 hover:border-slate-300 dark:hover:border-zinc-700'
@@ -510,7 +510,7 @@ export const CreateSkuPage: React.FC<CreateSkuPageProps> = ({
             <button
               type="button"
               onClick={() => scrollToSection('spesifikasi')}
-              className={`h-full px-3 sm:px-4 text-xs sm:text-sm font-semibold transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 border-b-2 ${
+              className={`h-full px-3 sm:px-4 text-xs sm:text-sm font-semibold transition-all cursor-pointer whitespace-nowrap shrink-0 flex items-center gap-2 border-b-2 ${
                 activeSection === 'spesifikasi'
                   ? 'border-[#c28e62] text-[#c28e62] font-bold'
                   : 'border-transparent text-slate-500 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-zinc-200 hover:border-slate-300 dark:hover:border-zinc-700'
@@ -523,7 +523,7 @@ export const CreateSkuPage: React.FC<CreateSkuPageProps> = ({
             <button
               type="button"
               onClick={() => scrollToSection('deskripsi')}
-              className={`h-full px-3 sm:px-4 text-xs sm:text-sm font-semibold transition-all cursor-pointer whitespace-nowrap flex items-center gap-2 border-b-2 ${
+              className={`h-full px-3 sm:px-4 text-xs sm:text-sm font-semibold transition-all cursor-pointer whitespace-nowrap shrink-0 flex items-center gap-2 border-b-2 ${
                 activeSection === 'deskripsi'
                   ? 'border-[#c28e62] text-[#c28e62] font-bold'
                   : 'border-transparent text-slate-500 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-zinc-200 hover:border-slate-300 dark:hover:border-zinc-700'
@@ -535,11 +535,11 @@ export const CreateSkuPage: React.FC<CreateSkuPageProps> = ({
           </div>
 
           {/* SISI KANAN: TOMBOL BATAL, SIMPAN DRAF, DAN SIMPAN SKU */}
-          <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+          <div className="grid grid-cols-2 md:flex items-center gap-2 sm:gap-2.5 py-2.5 md:py-0 shrink-0 w-full md:w-auto">
             <button
               type="button"
               onClick={handleCancelClick}
-              className="h-10 px-5 rounded-full border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 hover:bg-slate-50 dark:hover:bg-zinc-700 text-slate-700 dark:text-zinc-200 text-xs sm:text-sm font-semibold inline-flex items-center justify-center transition-all cursor-pointer whitespace-nowrap active:scale-95"
+              className="w-full md:w-auto h-9 sm:h-10 px-4 sm:px-5 rounded-full border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 hover:bg-slate-50 dark:hover:bg-zinc-700 text-slate-700 dark:text-zinc-200 text-xs sm:text-sm font-semibold inline-flex items-center justify-center transition-all cursor-pointer whitespace-nowrap active:scale-95"
             >
               Batal
             </button>
@@ -547,7 +547,7 @@ export const CreateSkuPage: React.FC<CreateSkuPageProps> = ({
               type="button"
               onClick={handleSubmit}
               disabled={isSubmitting}
-              className="h-10 px-5 rounded-full bg-[#c28e62] hover:bg-[#b07d53] disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs sm:text-sm font-semibold inline-flex items-center justify-center transition-all cursor-pointer whitespace-nowrap active:scale-95"
+              className="w-full md:w-auto h-9 sm:h-10 px-4 sm:px-5 rounded-full bg-[#c28e62] hover:bg-[#b07d53] disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs sm:text-sm font-semibold inline-flex items-center justify-center transition-all cursor-pointer whitespace-nowrap active:scale-95"
             >
               {isSubmitting ? (
                 <span>Menyimpan...</span>

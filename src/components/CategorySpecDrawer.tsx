@@ -273,30 +273,31 @@ export const CategorySpecDrawer: React.FC<CategorySpecDrawerProps> = ({
 
   return createPortal(
     <div
-      className={`fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex justify-end transition-opacity duration-300 ease-out ${
+      className={`fixed inset-0 z-[10010] bg-slate-900/60 backdrop-blur-xs flex justify-end transition-opacity duration-300 ease-out ${
         isVisible ? 'opacity-100' : 'opacity-0'
       }`}
       onClick={() => !isSaving && handleClose()}
     >
       <div
-        className={`bg-white dark:bg-zinc-900 w-full max-w-lg h-full border-l border-slate-200 dark:border-zinc-800 shadow-2xl flex flex-col overflow-hidden transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+        className={`bg-white dark:bg-zinc-900 w-full max-w-lg h-[100dvh] border-l border-slate-200 dark:border-zinc-800 shadow-2xl flex flex-col overflow-hidden transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
           isVisible ? 'translate-x-0' : 'translate-x-full'
         }`}
         onClick={(e) => e.stopPropagation()}
       >
         {/* HEADER */}
-        <div className="px-5 py-4 border-b border-slate-100 dark:border-zinc-800 flex items-center justify-between gap-3 bg-slate-50/50 dark:bg-zinc-800/30 shrink-0">
+        <div className="px-4 sm:px-5 py-3.5 sm:py-4 border-b border-slate-100 dark:border-zinc-800 flex items-center justify-between gap-3 bg-slate-50/50 dark:bg-zinc-800/30 shrink-0">
           <div className="flex items-center gap-2 min-w-0">
-            <h2 className="text-sm sm:text-base font-bold tracking-tight text-slate-800 dark:text-zinc-100 leading-snug">
+            <h2 className="text-sm sm:text-base font-bold tracking-tight text-slate-800 dark:text-zinc-100 leading-snug shrink-0">
               Form Spesifikasi
             </h2>
-            <span className="text-xs px-2.5 py-0.5 rounded-full bg-[#c28e62]/10 text-[#c28e62] dark:text-[#d4a379] font-semibold truncate max-w-[200px]">
+            <span className="text-xs px-2.5 py-0.5 rounded-full bg-[#c28e62]/10 text-[#c28e62] dark:text-[#d4a379] font-semibold truncate max-w-[140px] sm:max-w-[200px]">
               {currentTargetCategory.name}
             </span>
           </div>
           <button
             type="button"
             onClick={handleClose}
+            aria-label="Tutup panel spesifikasi"
             className="w-8 h-8 rounded-full bg-slate-100 dark:bg-zinc-800 hover:bg-slate-200 dark:hover:bg-zinc-700 text-slate-500 dark:text-zinc-400 flex items-center justify-center transition-colors cursor-pointer shrink-0"
           >
             <X size={15} />
@@ -432,7 +433,7 @@ export const CategorySpecDrawer: React.FC<CategorySpecDrawerProps> = ({
         </div>
 
         {/* FOOTER */}
-        <div className="p-4 border-t border-slate-100 dark:border-zinc-800 flex items-center justify-end gap-2.5 bg-slate-50/50 dark:bg-zinc-800/30 shrink-0">
+        <div className="p-3.5 sm:p-4 border-t border-slate-100 dark:border-zinc-800 grid grid-cols-2 sm:flex items-center justify-end gap-2.5 bg-slate-50/50 dark:bg-zinc-800/30 shrink-0">
           <button
             type="button"
             onClick={handleClose}
