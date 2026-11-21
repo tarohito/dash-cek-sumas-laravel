@@ -31,7 +31,6 @@
     </script>
     <style>
       #sumas-boot-splash {
-        position: relative;
         min-height: 100dvh;
         width: 100%;
         display: flex;
@@ -40,196 +39,63 @@
         justify-content: center;
         padding: 0 24px;
         background: #f8fafc;
-        color: #334155;
-        font-family: 'Plus Jakarta Sans', ui-sans-serif, system-ui, -apple-system, sans-serif;
         user-select: none;
-        overflow: hidden;
       }
       html.dark #sumas-boot-splash {
         background: #000000;
-        color: #d4d4d8;
       }
-      .sumas-boot-dots {
-        pointer-events: none;
-        position: absolute;
-        inset: 0;
-        opacity: 0.38;
-        background-image: radial-gradient(circle, rgba(194, 142, 98, 0.42) 1px, transparent 1px);
-        background-size: 26px 26px;
-        mask-image: radial-gradient(circle at center, black 12%, transparent 68%);
-        -webkit-mask-image: radial-gradient(circle at center, black 12%, transparent 68%);
-      }
-      html.dark .sumas-boot-dots { opacity: 0.22; }
-      .sumas-boot-inner {
-        position: relative;
-        z-index: 10;
+      .sumas-boot-stack {
         display: flex;
         flex-direction: column;
         align-items: center;
-        gap: 24px;
-        width: 100%;
-        max-width: 20rem;
-        text-align: center;
+        gap: 20px;
       }
-      .sumas-boot-seal {
-        position: relative;
-        width: 128px;
-        height: 128px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
+      .sumas-boot-logo {
+        height: 36px;
+        width: auto;
+        display: block;
       }
-      .sumas-boot-rings {
-        position: absolute;
-        inset: 0;
-        width: 100%;
-        height: 100%;
+      @media (min-width: 640px) {
+        .sumas-boot-logo {
+          height: 40px;
+        }
       }
-      .sumas-boot-ring-cw {
-        stroke: #cbd5e1;
-        transform-origin: center;
-        animation: sumas-b-cw 11s linear infinite;
+      .sumas-boot-logo-emblem {
+        fill: #c2986b;
       }
-      html.dark .sumas-boot-ring-cw { stroke: #3f3f46; }
-      .sumas-boot-ring-ccw {
-        stroke: #c28e62;
-        opacity: 0.85;
-        transform-origin: center;
-        animation: sumas-b-ccw 7.5s linear infinite;
+      .sumas-boot-logo-text {
+        fill: #242156;
       }
-      .sumas-boot-reticle {
-        position: absolute;
-        width: 86px;
-        height: 86px;
-        pointer-events: none;
-        animation: sumas-b-breathe 2.4s ease-in-out infinite;
+      html.dark .sumas-boot-logo-text {
+        fill: #ffffff;
       }
-      .sumas-boot-reticle span {
-        position: absolute;
-        width: 14px;
-        height: 14px;
-        border-color: #c28e62;
-        border-style: solid;
-        border-width: 0;
-      }
-      .sumas-boot-reticle .tl { top: 0; left: 0; border-top-width: 2px; border-left-width: 2px; border-top-left-radius: 6px; }
-      .sumas-boot-reticle .tr { top: 0; right: 0; border-top-width: 2px; border-right-width: 2px; border-top-right-radius: 6px; }
-      .sumas-boot-reticle .bl { bottom: 0; left: 0; border-bottom-width: 2px; border-left-width: 2px; border-bottom-left-radius: 6px; }
-      .sumas-boot-reticle .br { bottom: 0; right: 0; border-bottom-width: 2px; border-right-width: 2px; border-bottom-right-radius: 6px; }
-      .sumas-boot-badge {
-        position: relative;
-        width: 64px;
-        height: 64px;
-        border-radius: 16px;
-        background: #ffffff;
-        border: 1px solid rgba(226, 232, 240, 0.9);
-        display: flex;
-        align-items: center;
-        justify-content: center;
+      .sumas-boot-track {
+        width: 176px;
+        height: 3px;
+        border-radius: 9999px;
+        background: #e2e8f0;
         overflow: hidden;
       }
-      html.dark .sumas-boot-badge {
-        background: #18181b;
-        border-color: #27272a;
+      html.dark .sumas-boot-track {
+        background: #27272a;
       }
-      .sumas-boot-beam {
-        position: absolute;
-        left: 4px;
-        right: 4px;
-        top: 50%;
-        margin-top: -1px;
-        height: 2px;
-        z-index: 20;
+      .sumas-boot-bar {
+        width: 40%;
+        height: 100%;
         border-radius: 9999px;
-        background: linear-gradient(90deg, transparent 0%, #c28e62 22%, #f1cca7 50%, #c28e62 78%, transparent 100%);
-        animation: sumas-b-beam 2.1s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
-      }
-      .sumas-boot-meta {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 12px;
-      }
-      .sumas-boot-wordmark {
-        font-size: 20px;
-        font-weight: 700;
-        letter-spacing: 0.28em;
-        padding-left: 0.28em;
-        color: #242156;
-        line-height: 1;
-      }
-      html.dark .sumas-boot-wordmark { color: #ffffff; }
-      .sumas-boot-pill {
-        display: inline-flex;
-        align-items: center;
-        gap: 10px;
-        padding: 6px 14px;
-        border-radius: 9999px;
-        background: rgba(255, 255, 255, 0.9);
-        border: 1px solid rgba(226, 232, 240, 0.9);
-      }
-      html.dark .sumas-boot-pill {
-        background: rgba(24, 24, 27, 0.9);
-        border-color: #27272a;
-      }
-      .sumas-boot-qr {
-        display: grid;
-        grid-template-columns: repeat(3, 4px);
-        gap: 2.5px;
-      }
-      .sumas-boot-qr i {
-        display: block;
-        width: 4px;
-        height: 4px;
-        border-radius: 1px;
         background: #c28e62;
-        animation: sumas-b-wave 1.5s ease-in-out infinite;
+        animation: sumas-boot-slide 1.25s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+        will-change: transform;
       }
-      .sumas-boot-tag {
-        font-family: 'Kode Mono', ui-monospace, monospace;
-        font-size: 10px;
-        font-weight: 600;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-        color: #475569;
+      @keyframes sumas-boot-slide {
+        0% { transform: translateX(-110%); }
+        100% { transform: translateX(260%); }
       }
-      html.dark .sumas-boot-tag { color: #d4d4d8; }
-      .sumas-boot-msg {
-        font-size: 11px;
-        font-weight: 500;
-        letter-spacing: 0.025em;
-        color: #94a3b8;
-        margin: 0;
-      }
-      html.dark .sumas-boot-msg { color: #71717a; }
-      .sumas-boot-footer {
-        position: absolute;
-        bottom: 24px;
-        left: 0;
-        right: 0;
-        text-align: center;
-        padding: 0 16px;
-        font-family: 'Kode Mono', ui-monospace, monospace;
-        font-size: 10px;
-        font-weight: 500;
-        letter-spacing: 0.18em;
-        text-transform: uppercase;
-        color: rgba(148, 163, 184, 0.75);
-      }
-      html.dark .sumas-boot-footer { color: #52525b; }
-      @keyframes sumas-b-beam {
-        0%, 100% { transform: translateY(-28px); opacity: 0.25; }
-        15%, 85% { opacity: 1; }
-        50% { transform: translateY(28px); opacity: 1; }
-      }
-      @keyframes sumas-b-cw { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-      @keyframes sumas-b-ccw { from { transform: rotate(360deg); } to { transform: rotate(0deg); } }
-      @keyframes sumas-b-breathe { 0%, 100% { transform: scale(1); opacity: 0.85; } 50% { transform: scale(1.06); opacity: 1; } }
-      @keyframes sumas-b-wave { 0%, 100% { opacity: 0.18; transform: scale(0.75); } 45% { opacity: 1; transform: scale(1); } }
       @media (prefers-reduced-motion: reduce) {
-        .sumas-boot-ring-cw, .sumas-boot-ring-ccw, .sumas-boot-reticle, .sumas-boot-beam, .sumas-boot-qr i {
+        .sumas-boot-bar {
           animation: none !important;
           transform: none !important;
+          width: 100% !important;
           opacity: 0.85 !important;
         }
       }
@@ -239,36 +105,24 @@
   </head>
   <body class="bg-[#f8fafc] dark:bg-black text-slate-800 dark:text-zinc-200 antialiased min-h-screen">
     <div id="root">
-      <div id="sumas-boot-splash" role="status" aria-live="polite" aria-busy="true">
-        <div class="sumas-boot-dots" aria-hidden="true"></div>
-        <div class="sumas-boot-inner">
-          <div class="sumas-boot-seal">
-            <svg viewBox="0 0 128 128" class="sumas-boot-rings" aria-hidden="true">
-              <circle cx="64" cy="64" r="58" fill="none" stroke-width="1" stroke-dasharray="3 7" class="sumas-boot-ring-cw" />
-              <circle cx="64" cy="64" r="49" fill="none" stroke-width="1.5" stroke-dasharray="24 14 6 14" stroke-linecap="round" class="sumas-boot-ring-ccw" />
-            </svg>
-            <div class="sumas-boot-reticle" aria-hidden="true">
-              <span class="tl"></span><span class="tr"></span><span class="bl"></span><span class="br"></span>
-            </div>
-            <div class="sumas-boot-badge">
-              <img src="/favicon.svg" alt="SUMAS Emblem" width="36" height="36" style="object-fit:contain;position:relative;z-index:10;" />
-              <div class="sumas-boot-beam" aria-hidden="true"></div>
-            </div>
-          </div>
-          <div class="sumas-boot-meta">
-            <div class="sumas-boot-wordmark">SUMAS</div>
-            <div class="sumas-boot-pill">
-              <div class="sumas-boot-qr" aria-hidden="true">
-                <i style="animation-delay:0ms"></i><i style="animation-delay:120ms"></i><i style="animation-delay:240ms"></i>
-                <i style="animation-delay:120ms"></i><i style="animation-delay:240ms"></i><i style="animation-delay:360ms"></i>
-                <i style="animation-delay:240ms"></i><i style="animation-delay:360ms"></i><i style="animation-delay:480ms"></i>
-              </div>
-              <span class="sumas-boot-tag">SEAL &middot; VERIFY</span>
-            </div>
-            <p class="sumas-boot-msg">Memuat sistem...</p>
+      <div id="sumas-boot-splash" role="status" aria-live="polite" aria-busy="true" aria-label="Memuat sistem...">
+        <div class="sumas-boot-stack">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 105.06 26.73" class="sumas-boot-logo" role="img" aria-label="SUMAS Logo">
+            <g>
+              <path class="sumas-boot-logo-emblem" d="M20.92,13.75l-.7-1.05C18.27,9.82,15.9,7.29,15.9,4.52A4.21,4.21,0,0,1,16.72,2a3,3,0,0,1,1-.77A3.3,3.3,0,0,1,19.13,1a2.24,2.24,0,0,1,2,.91,5.74,5.74,0,0,1,.92,2,6.9,6.9,0,0,1,.25,2h1V.39h-1c-.05.51-.15.77-.29.8A1.09,1.09,0,0,1,21.33,1,5.3,5.3,0,0,0,19.09,0,3.93,3.93,0,0,0,16,1,5.65,5.65,0,0,0,14.46,3.7a7,7,0,0,0-.07,2.67c.74,3.59,3.35,6.87,5.3,9.87h0l-1.14,2.32L11.85,5.88H9v.67h1V19.77a10.18,10.18,0,0,1-1-.67A10.82,10.82,0,0,1,6.31,16,10.47,10.47,0,0,1,4.9,11.36a10.61,10.61,0,0,1,.71-4.77.37.37,0,0,0,0-.11,3.08,3.08,0,0,0,.44-1A11.06,11.06,0,0,1,7.86,3,2.36,2.36,0,0,0,9.05,2,2.57,2.57,0,0,0,9,.2,2.52,2.52,0,0,0,7.55,1.29,2.32,2.32,0,0,0,7.48,2.9c.36-.63.62-1.07.91-1.52.18-.26.25-.2.14.1s-.4.92-.65,1.41l-.08,0A11.07,11.07,0,0,0,6.17,5.06s0-.06,0-.09A3.53,3.53,0,0,0,5,2.69,3.54,3.54,0,0,0,3.85,5a3.27,3.27,0,0,0,.92,2c.06-1,.1-1.71.19-2.45,0-.44.18-.4.22,0a19.35,19.35,0,0,1,.08,2.34A10.85,10.85,0,0,0,4.64,9.5a3.17,3.17,0,0,0-.55-1.37A4.42,4.42,0,0,0,1.21,6.67a4.5,4.5,0,0,0,.51,3.19,4,4,0,0,0,2.45,1.38C3.49,10.18,3,9.43,2.54,8.62c-.27-.48-.11-.55.26-.14a26.38,26.38,0,0,1,1.76,2.25c0,.22,0,.44,0,.66a10.45,10.45,0,0,0,.32,2.09,3.72,3.72,0,0,0-1.35-1.11A4.92,4.92,0,0,0,0,12.56a4.85,4.85,0,0,0,2.22,2.75,4.46,4.46,0,0,0,3.08,0c-1.23-.64-2.1-1.08-3-1.6-.52-.31-.4-.46.17-.27A28.49,28.49,0,0,1,5.18,14.5a10.38,10.38,0,0,0,.72,1.67,11.42,11.42,0,0,0,.71,1.13,4,4,0,0,0-1.25-.44A6.23,6.23,0,0,0,1,18.24a6.3,6.3,0,0,0,3.65,2.7,5.75,5.75,0,0,0,3.82-1c-1.73-.4-3-.68-4.22-1-.75-.21-.65-.44.13-.39A35.34,35.34,0,0,1,8,19c.22.21.44.41.66.59a11.75,11.75,0,0,0,2.66,1.63c.34.15.63.24.82.31l.05,0v-.7c-.16-.06-.37-.12-.62-.23l-.4-.18V9.61l6.32,12h.61l2.18-4.37A8.75,8.75,0,0,1,22,22.08,5.22,5.22,0,0,1,21,24.85a3,3,0,0,1-1.06.83,2.37,2.37,0,0,1-1.2.3,3.35,3.35,0,0,1-1.35-.33,3.15,3.15,0,0,1-.91-.73,3.67,3.67,0,0,1-.58-1,8.47,8.47,0,0,1-.37-1.07,11.88,11.88,0,0,1-.2-1.37c0-.34,0-.71,0-.71h-.93v5.69h.95c0-.49.13-.74.31-.77a1.44,1.44,0,0,1,.75.2,4.77,4.77,0,0,0,2.32.8,3.53,3.53,0,0,0,2-.4,4.1,4.1,0,0,0,1.34-1,5.24,5.24,0,0,0,.9-1.4,9.29,9.29,0,0,0,.63-3,12,12,0,0,0-2.11-6.22C21.34,14.42,21.14,14.09,20.92,13.75Zm-3,7.43h-.13L11.13,8.66V8.11l.2.36L17.94,21h0Zm4.64.77a5.68,5.68,0,0,1-1,3l-.1.11.11-.1c-.08.09-.17.17-.26.26l.1-.12a5.62,5.62,0,0,0,1-3c.1-1.69-.72-3.46-1.86-5.31-.19-.31-.4-.63-.61-1-.32-.49-.66-1-1-1.48-1.73-2.55-3.53-5.2-4.12-8.06a6.47,6.47,0,0,1,.07-2.5,5.17,5.17,0,0,1,1.39-2.51l.07-.06A5.26,5.26,0,0,0,15,3.64a6.47,6.47,0,0,0-.07,2.5c.59,2.86,2.39,5.5,4.13,8.06l1,1.41c.21.32.42.64.61,1C21.79,18.44,22.63,20.24,22.52,22Z" />
+              <path class="sumas-boot-logo-emblem" d="M18.06,4.28a2.29,2.29,0,0,0,.65,1.45c0-.67,0-1.06.06-1.72,0-.31.14-.34.16,0,.05.67.07,1,.13,1.74a2.24,2.24,0,0,0,.66-1.45,3,3,0,0,0-.86-1.75A3,3,0,0,0,18.06,4.28Z" />
+              <path class="sumas-boot-logo-emblem" d="M31.64,16.86a4,4,0,0,0-1.25.44,11.42,11.42,0,0,0,.71-1.13,10.38,10.38,0,0,0,.72-1.67,27.45,27.45,0,0,1,2.69-1.08c.57-.19.68,0,.16.27-.88.52-1.74,1-3,1.6a4.46,4.46,0,0,0,3.08,0A4.89,4.89,0,0,0,37,12.56a4.92,4.92,0,0,0-3.53-.19,3.72,3.72,0,0,0-1.35,1.11,10.45,10.45,0,0,0,.32-2.09c0-.22,0-.44,0-.66A26.38,26.38,0,0,1,34.2,8.48c.37-.41.53-.34.25.14-.46.81-.94,1.56-1.62,2.62a4,4,0,0,0,2.45-1.38,4.5,4.5,0,0,0,.51-3.19A4.45,4.45,0,0,0,32.9,8.13a3.15,3.15,0,0,0-.54,1.37,10.86,10.86,0,0,0-.63-2.57c0-.83,0-1.64.08-2.34.05-.43.18-.47.23,0,.08.74.13,1.45.19,2.45a3.27,3.27,0,0,0,.92-2A3.54,3.54,0,0,0,32,2.69,3.57,3.57,0,0,0,30.81,5s0,.06,0,.09A11.48,11.48,0,0,0,29.2,2.94l-.08,0c-.25-.49-.48-1-.65-1.41s0-.36.14-.1c.29.45.54.89.91,1.52a2.38,2.38,0,0,0-.07-1.61A2.55,2.55,0,0,0,28,.2,2.51,2.51,0,0,0,28,2a2.31,2.31,0,0,0,1.18,1,10.78,10.78,0,0,1,1.77,2.5,3.06,3.06,0,0,0,.43,1l.06.11a10.61,10.61,0,0,1,.71,4.77A10.6,10.6,0,0,1,30.69,16,11,11,0,0,1,28,19.1c-.3.23-.58.42-.86.6V6.55h1V5.88H24.79L21.2,13.17h0c.22.33.43.66.62,1l3-5.95V20.8h0v.7l.06,0c.19-.07.47-.16.82-.31a12,12,0,0,0,2.66-1.63c.22-.18.44-.38.66-.59a34.65,34.65,0,0,1,3.61-.46c.78,0,.87.18.13.39-1.27.36-2.49.64-4.23,1a5.79,5.79,0,0,0,3.83,1A6.3,6.3,0,0,0,36,18.24,6.23,6.23,0,0,0,31.64,16.86ZM25.19,7.71l.19-.35V20.59l-.19.07Z" />
+              <path class="sumas-boot-logo-text" d="M48.26,18.71a5.26,5.26,0,0,1-3.84,1.34A6.67,6.67,0,0,1,40.65,19a2.89,2.89,0,0,1,0,.63c-.05.2-.26.3-.6.3V15.41h.65q.36,4,3.66,4a3.64,3.64,0,0,0,1.53-.31A2.31,2.31,0,0,0,47,15.89a5.41,5.41,0,0,0-2.46-1.75c-1.39-.6-2.21-1-2.46-1.1a3.35,3.35,0,0,1-2-2.95A2.94,2.94,0,0,1,41,8a4.9,4.9,0,0,1,3.62-1.3A7,7,0,0,1,48,7.52a1.45,1.45,0,0,1,0-.4c.06-.22.26-.33.61-.33v3.77H48a3.29,3.29,0,0,0-.6-2,3.29,3.29,0,0,0-2.76-1.23,3.8,3.8,0,0,0-1.34.23,2,2,0,0,0-1.4,2,2,2,0,0,0,.26,1,4.92,4.92,0,0,0,2.41,1.68c1.41.62,2.25,1,2.52,1.15a3.47,3.47,0,0,1,2.07,3.08A3.13,3.13,0,0,1,48.26,18.71Z" />
+              <path class="sumas-boot-logo-text" d="M50.48,6.9h5.28v.56h-1.7v7.39a8.16,8.16,0,0,0,.3,2.38,3.08,3.08,0,0,0,3.32,2.22,4.36,4.36,0,0,0,.51,0q3.11-.32,3.11-4.5V7.46H59.57V6.9h4.21v.56H62.05v7.33A9.48,9.48,0,0,1,61.82,17c-.54,2.06-2.07,3.1-4.6,3.1q-5,0-5-5.07V7.46H50.48Z" />
+              <path class="sumas-boot-logo-text" d="M80.72,7.46H79V19.27h1.16a.83.83,0,0,1,.22,0c.23,0,.34.22.34.53H75.55v-.56h1.72V8.84l-5,11.1h-.45L67.12,10v9.27h1.16a.78.78,0,0,1,.22,0c.23,0,.34.22.34.53H64.53v-.56h1.73V7.46H64.53V6.9h3.09l5,10.54L77.27,6.9h3.45Z" />
+              <path class="sumas-boot-logo-text" d="M89.93,19.83v-.56h1.4l-1.62-4.18h-4.5l-1.62,4.18h1.06a.76.76,0,0,1,.21,0c.23,0,.35.22.35.53H81.37v-.56h1.36L87.56,6.9h.8l4.93,12.37H94a.78.78,0,0,1,.22,0c.23,0,.35.22.35.53ZM87.45,9.25l-2,5.22h4Z" />
+              <path class="sumas-boot-logo-text" d="M104.14,18.71a5.26,5.26,0,0,1-3.84,1.34A6.67,6.67,0,0,1,96.53,19a2.89,2.89,0,0,1,0,.63c0,.2-.26.3-.6.3V15.41h.65q.36,4,3.66,4a3.64,3.64,0,0,0,1.53-.31,2.31,2.31,0,0,0,1.19-3.25,5.41,5.41,0,0,0-2.46-1.75c-1.4-.6-2.21-1-2.46-1.1a3.35,3.35,0,0,1-2-2.95A2.94,2.94,0,0,1,96.83,8a4.9,4.9,0,0,1,3.62-1.3,7,7,0,0,1,3.45.84,1.45,1.45,0,0,1,0-.4c.06-.22.26-.33.61-.33v3.77h-.65a3.29,3.29,0,0,0-.6-2,3.29,3.29,0,0,0-2.76-1.23,3.8,3.8,0,0,0-1.34.23,2,2,0,0,0-1.4,2,2,2,0,0,0,.26,1,4.92,4.92,0,0,0,2.41,1.68c1.41.62,2.25,1,2.52,1.15a3.47,3.47,0,0,1,2.07,3.08A3.13,3.13,0,0,1,104.14,18.71Z" />
+            </g>
+          </svg>
+          <div class="sumas-boot-track" aria-hidden="true">
+            <div class="sumas-boot-bar"></div>
           </div>
         </div>
-        <div class="sumas-boot-footer">SUMAS // ANTI-COUNTERFEIT TELEMETRY</div>
       </div>
     </div>
   </body>

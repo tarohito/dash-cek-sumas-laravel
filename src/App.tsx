@@ -112,7 +112,7 @@ import {
 } from './utils/rbac';
 import { generateA3PlusStickersPdf, generateTagsCsv, saveFileWithNativePicker } from './utils/pdfGenerator';
 import { compressAndConvertToWebP } from './utils/imageOptimizer';
-import { apiFetch, setStoredSessionToken, clearStoredSessionToken } from './utils/authSession';
+import { apiFetch, clearStoredSessionToken } from './utils/authSession';
 import { UsernameField, type UsernameFieldStatus } from './components/UsernameField';
 import {
   slugifyUsername as buildUsernameSlug,
@@ -1857,12 +1857,8 @@ export default function App() {
     user: any;
     permissions?: string[];
     matrix?: RbacMatrix;
-    sessionToken?: string;
     rememberMe?: boolean;
   }) => {
-    if (payload.sessionToken) {
-      setStoredSessionToken(payload.sessionToken, payload.rememberMe !== false);
-    }
     if (payload.matrix) {
       setRbacMatrix(mergeRbacMatrix(payload.matrix));
     }

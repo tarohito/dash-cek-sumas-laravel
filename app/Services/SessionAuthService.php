@@ -79,6 +79,94 @@ class SessionAuthService
         return hash_hmac('sha256', $rawToken, $secret);
     }
 
+    public const ROTATION_INTERVAL_MS = 24 * 3600 * 1000;
+
+    public static function isHttpsRequest(Request $request): bool
+    {
+        return $request->isSecure() || strtolower((string) $request->header('x-forwarded-proto')) === 'https';
+    }
+
+    public static function generateCsrfToken(): string
+    {
+        return bin2hex(random_bytes(32));
+    }
+
+    public static function extractUaFamily(?string $userAgent): string
+    {
+        $ua = strtolower(trim((string) $userAgent));
+        if ($ua === '') {
+            return 'unknown|unknown';
+        }
+
+        $os = 'other';
+        if (str_contains($ua, 'iphone') || str_contains($ua, 'ipad') || str_contains($ua, 'ipod')) {
+            $os = 'ios';
+        } elseif (str_contains($ua, 'android')) {
+            $os = 'android';
+        } elseif (str_contains($ua, 'windows')) {
+            $os = 'windows';
+        } elseif (str_contains($ua, 'mac os') || str_contains($ua, 'macintosh')) {
+            $os = 'macos';
+        } elseif (str_contains($ua, 'linux')) {
+            $os = 'linux';
+        }
+
+        $browser = 'other';
+        if (str_contains($ua, 'edg/') || str_contains($ua, 'edga/') || str_contains($ua, 'edgios/')) {
+            $browser = 'edge';
+        } elseif (str_contains($ua, 'opr/') || str_contains($ua, 'opera')) {
+            $browser = 'opera';
+        } elseif (str_contains($ua, 'firefox') || str_contains($ua, 'fxios')) {
+            $browser = 'firefox';
+        } elseif (str_contains($ua, 'chrome') || str_contains($ua, 'crios')) {
+            $browser = 'chrome';
+        } elseif (str_contains($ua, 'safari')) {
+            $browser = 'safari';
+        }
+
+        return "{$os}|{$browser}";
+    }
+
+    public static function validateSameOriginAndCsrf(Request $request, bool $requireCsrfToken = true): ?string
+    {
+        $method = strtoupper($request->getMethod());
+        if (in_array($method, ['GET', 'HEAD', 'OPTIONS'], true)) {
+            return null;
+        }
+
+        $expectedHost = strtolower($request->getHost());
+        $origin = trim((string) $request->header('Origin', ''));
+        if ($origin !== '') {
+            $originHost = strtolower((string) parse_url($origin, PHP_URL_HOST));
+            if ($originHost === '' || $originHost !== $expectedHost) {
+                return 'Permintaan lintas origin ditolak demi keamanan sesi.';
+            }
+        } else {
+            $referer = trim((string) $request->header('Referer', ''));
+            if ($referer !== '') {
+                $refererHost = strtolower((string) parse_url($referer, PHP_URL_HOST));
+                if ($refererHost === '' || $refererHost !== $expectedHost) {
+                    return 'Sumber permintaan tidak valid.';
+                }
+            }
+        }
+
+        if ($requireCsrfToken) {
+            $xrw = strtolower(trim((string) $request->header('X-Requested-With', '')));
+            if ($xrw !== 'xmlhttprequest') {
+                return 'Header keamanan permintaan tidak lengkap.';
+            }
+
+            $csrfCookie = trim((string) $request->cookie('sumas_csrf', ''));
+            $csrfHeader = trim((string) $request->header('X-Sumas-CSRF', ''));
+            if ($csrfCookie !== '' && ($csrfHeader === '' || !hash_equals($csrfCookie, $csrfHeader))) {
+                return 'Token keamanan CSRF tidak cocok. Muat ulang halaman lalu coba kembali.';
+            }
+        }
+
+        return null;
+    }
+
     public static function extractSessionToken(Request $request): ?string
     {
         $cookieToken = $request->cookie('sumas_session');
@@ -86,14 +174,6 @@ class SessionAuthService
             $cookieToken = trim($cookieToken);
             if (strlen($cookieToken) >= 32 && strlen($cookieToken) <= 256) {
                 return $cookieToken;
-            }
-        }
-
-        $authHeader = trim((string) $request->header('Authorization', ''));
-        if (str_starts_with(strtolower($authHeader), 'bearer ')) {
-            $bearer = trim(substr($authHeader, 7));
-            if (strlen($bearer) >= 32 && strlen($bearer) <= 256) {
-                return $bearer;
             }
         }
 
@@ -171,7 +251,7 @@ class SessionAuthService
         $tokenHash = self::hashSessionToken($rawToken, $secret);
         $session = DB::table('user_sessions')
             ->where('tokenHash', $tokenHash)
-            ->first(['userId', 'expiresAt']);
+            ->first(['userId', 'createdAt', 'expiresAt', 'userAgent']);
 
         if (!$session) {
             return null;
@@ -186,6 +266,21 @@ class SessionAuthService
             return null;
         }
 
+        // Session User-Agent family binding: revoke immediately if cookie is replayed from a different OS/browser family
+        $storedUa = trim((string) ($session->userAgent ?? ''));
+        $currentUa = SecurityHardeningService::sanitizeStringInput($request->userAgent(), 240);
+        if ($storedUa !== '' && $currentUa !== '') {
+            $storedFamily = self::extractUaFamily($storedUa);
+            $currentFamily = self::extractUaFamily($currentUa);
+            if ($storedFamily !== 'unknown|unknown' && $currentFamily !== 'unknown|unknown' && $storedFamily !== $currentFamily) {
+                try {
+                    DB::table('user_sessions')->where('tokenHash', $tokenHash)->delete();
+                } catch (\Throwable) {
+                }
+                return null;
+            }
+        }
+
         $user = DB::table('users')
             ->select(['id', 'name', 'username', 'email', 'phone', 'role', 'avatar', 'status', 'createdAt'])
             ->where('id', $session->userId)
@@ -194,6 +289,32 @@ class SessionAuthService
         if (!$user || ($user->status ?? 'Aktif') === 'Nonaktif') {
             self::revokeAllUserSessions((string) $session->userId);
             return null;
+        }
+
+        // Periodic 24-hour session token rotation to limit exposure of static cookies
+        $createdAt = (int) ($session->createdAt ?? 0);
+        $remainingMs = (int) $session->expiresAt - $nowMs;
+        if ($createdAt > 0 && ($nowMs - $createdAt) > self::ROTATION_INTERVAL_MS && $remainingMs > 60000) {
+            try {
+                $newRawToken = bin2hex(random_bytes(32));
+                $newTokenHash = self::hashSessionToken($newRawToken, $secret);
+                DB::transaction(function () use ($tokenHash, $newTokenHash, $session, $nowMs, $request, $currentUa) {
+                    DB::table('user_sessions')->insert([
+                        'tokenHash' => $newTokenHash,
+                        'userId' => (string) $session->userId,
+                        'createdAt' => $nowMs,
+                        'expiresAt' => (int) $session->expiresAt,
+                        'ipAddress' => SecurityHardeningService::getSafeClientIp($request),
+                        'userAgent' => $currentUa ?: (string) ($session->userAgent ?? ''),
+                    ]);
+                    DB::table('user_sessions')->where('tokenHash', $tokenHash)->delete();
+                });
+                $request->attributes->set('sumas_rotated_token', [
+                    'token' => $newRawToken,
+                    'minutes' => max(1, (int) ceil($remainingMs / 60000)),
+                ]);
+            } catch (\Throwable) {
+            }
         }
 
         $arr = (array) $user;

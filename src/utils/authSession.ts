@@ -1,61 +1,49 @@
 // =====================================================================
-// AUTH SESSION TOKEN HELPER & SAFE apiFetch WRAPPER
-// Menyediakan autentikasi ganda (Cookie HttpOnly + Authorization Bearer)
-// tanpa memodifikasi window.fetch (aman pada lingkungan browser dengan
-// getter-only window.fetch maupun embedded preview iframe).
+// AUTH SESSION HELPER & SAFE apiFetch WRAPPER (HttpOnly Cookie + CSRF)
+// Menggunakan cookie sesi HttpOnly murni (tanpa penyimpanan token sesi
+// di localStorage/sessionStorage agar aman dari pencurian XSS) serta
+// proteksi CSRF double-submit (X-Requested-With + X-Sumas-CSRF).
 // =====================================================================
 
-const SESSION_TOKEN_KEY = 'sumas_session_token';
+const LEGACY_SESSION_TOKEN_KEY = 'sumas_session_token';
+const CSRF_COOKIE_NAME = 'sumas_csrf';
 
-let inMemoryToken: string | null = null;
+export function clearStoredSessionToken(): void {
+  try {
+    window.localStorage.removeItem(LEGACY_SESSION_TOKEN_KEY);
+  } catch (_) {}
+  try {
+    window.sessionStorage.removeItem(LEGACY_SESSION_TOKEN_KEY);
+  } catch (_) {}
+}
+
+// Hapus sisa token sesi lama di Web Storage jika masih ada dari versi sebelumnya
+if (typeof window !== 'undefined') {
+  clearStoredSessionToken();
+}
 
 export function getStoredSessionToken(): string | null {
-  if (inMemoryToken) return inMemoryToken;
-  try {
-    const fromSession = window.sessionStorage.getItem(SESSION_TOKEN_KEY);
-    if (fromSession) {
-      inMemoryToken = fromSession;
-      return fromSession;
-    }
-  } catch (_) {}
-  try {
-    const fromLocal = window.localStorage.getItem(SESSION_TOKEN_KEY);
-    if (fromLocal) {
-      inMemoryToken = fromLocal;
-      return fromLocal;
-    }
-  } catch (_) {}
   return null;
 }
 
-export function setStoredSessionToken(token?: string | null, rememberMe = true): void {
-  const cleaned = typeof token === 'string' ? token.trim() : '';
-  if (!cleaned) {
-    clearStoredSessionToken();
-    return;
-  }
-  inMemoryToken = cleaned;
-  try {
-    if (rememberMe) {
-      window.localStorage.setItem(SESSION_TOKEN_KEY, cleaned);
-      window.sessionStorage.removeItem(SESSION_TOKEN_KEY);
-    } else {
-      window.sessionStorage.setItem(SESSION_TOKEN_KEY, cleaned);
-      window.localStorage.removeItem(SESSION_TOKEN_KEY);
-    }
-  } catch (_) {
-    // Fallback ke inMemoryToken jika browser membatasi storage di iframe
-  }
+export function setStoredSessionToken(_token?: string | null, _rememberMe = true): void {
+  clearStoredSessionToken();
 }
 
-export function clearStoredSessionToken(): void {
-  inMemoryToken = null;
+export function getCsrfCookieToken(): string | null {
+  if (typeof document === 'undefined' || !document.cookie) return null;
   try {
-    window.localStorage.removeItem(SESSION_TOKEN_KEY);
+    const prefix = `${CSRF_COOKIE_NAME}=`;
+    const parts = document.cookie.split(';');
+    for (const part of parts) {
+      const trimmed = part.trim();
+      if (trimmed.startsWith(prefix)) {
+        const value = decodeURIComponent(trimmed.slice(prefix.length)).trim();
+        return value || null;
+      }
+    }
   } catch (_) {}
-  try {
-    window.sessionStorage.removeItem(SESSION_TOKEN_KEY);
-  } catch (_) {}
+  return null;
 }
 
 function isSameOriginApiRequest(input: RequestInfo | URL): boolean {
@@ -80,21 +68,24 @@ export function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<
     return globalThis.fetch(input, init);
   }
 
-  const token = getStoredSessionToken();
+  const baseHeaders =
+    init?.headers ?? (input instanceof Request ? input.headers : undefined);
+  const headers = new Headers(baseHeaders);
+
+  if (!headers.has('X-Requested-With')) {
+    headers.set('X-Requested-With', 'XMLHttpRequest');
+  }
+
+  const csrfToken = getCsrfCookieToken();
+  if (csrfToken && !headers.has('X-Sumas-CSRF')) {
+    headers.set('X-Sumas-CSRF', csrfToken);
+  }
+
   const nextInit: RequestInit = {
     ...init,
     credentials: init?.credentials ?? 'same-origin',
+    headers,
   };
-
-  if (token) {
-    const baseHeaders =
-      init?.headers ?? (input instanceof Request ? input.headers : undefined);
-    const headers = new Headers(baseHeaders);
-    if (!headers.has('Authorization')) {
-      headers.set('Authorization', `Bearer ${token}`);
-    }
-    nextInit.headers = headers;
-  }
 
   return globalThis.fetch(input, nextInit);
 }
