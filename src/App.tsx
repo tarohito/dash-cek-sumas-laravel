@@ -5353,28 +5353,7 @@ export default function App() {
         {/* BOTTOM USER PROFILE CARD */}
         <div className="p-3 border-t border-slate-100 dark:border-zinc-800 flex-shrink-0 bg-white dark:bg-zinc-900">
           {isSidebarMinimized && !isMobile ? (
-            <div className="flex flex-col items-center gap-2">
-              <div className="relative w-9 h-9 rounded-full flex-shrink-0">
-                {currentUser?.avatar ? (
-                  <img 
-                    src={currentUser.avatar} 
-                    alt={currentUser.name} 
-                    onError={(e) => {
-                      const el = e.currentTarget;
-                      el.onerror = null;
-                      el.src = getInitialsAvatar(currentUser.name, currentUser.id || currentUser.email || currentUser.name);
-                    }}
-                    className="w-9 h-9 rounded-full object-cover border border-[#c28e62]/40" 
-                  />
-                ) : (
-                  <div
-                    className="w-9 h-9 rounded-full flex items-center justify-center text-white font-semibold text-xs aspect-square overflow-hidden"
-                    style={{ backgroundColor: getAvatarColorCss(currentUser?.id || currentUser?.email || currentUser?.name) }}
-                  >
-                    {getInitials(currentUser?.name, isSuperAdmin ? 'SA' : isBrandB2B ? 'SM' : 'RT')}
-                  </div>
-                )}
-              </div>
+            <div className="flex items-center justify-center">
               <button
                 type="button"
                 onClick={handleLogout}
@@ -5383,7 +5362,7 @@ export default function App() {
                 aria-label="Keluar dari akun"
                 className="w-9 h-9 rounded-full text-slate-500 dark:text-zinc-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40 active:bg-rose-100 dark:active:bg-rose-950/60 flex items-center justify-center transition-colors cursor-pointer"
               >
-                <LogOut size={16} />
+                <LogOut size={18} />
               </button>
             </div>
           ) : (
