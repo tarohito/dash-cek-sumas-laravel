@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\NotificationService;
+use App\Services\RbacService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -32,6 +33,7 @@ class NotificationController extends Controller
     {
         $authUser = $this->authUser($request);
         $scope = $this->brandScope($request);
+        $isSuperAdmin = RbacService::normalizeRole($authUser['role'] ?? null) === 'Super Admin';
         $canManageUsers = $this->can($request, 'users.manage');
         $nowMs = (int) round(microtime(true) * 1000);
 
@@ -50,6 +52,7 @@ class NotificationController extends Controller
 
         $accessCtx = [
             'userId' => $authUser['id'],
+            'isSuperAdmin' => $isSuperAdmin,
             'isGlobal' => !empty($scope['isGlobal']),
             'canManageUsers' => $canManageUsers,
             'ownedBrandNames' => $scope['ownedBrandNames'] ?? [],
@@ -144,12 +147,14 @@ class NotificationController extends Controller
 
         $authUser = $this->authUser($request);
         $scope = $this->brandScope($request);
+        $isSuperAdmin = RbacService::normalizeRole($authUser['role'] ?? null) === 'Super Admin';
         $canManageUsers = $this->can($request, 'users.manage');
         $readAtIso = gmdate('Y-m-d\TH:i:s\Z');
         $body = $request->all();
 
         $accessCtx = [
             'userId' => $authUser['id'],
+            'isSuperAdmin' => $isSuperAdmin,
             'isGlobal' => !empty($scope['isGlobal']),
             'canManageUsers' => $canManageUsers,
             'ownedBrandNames' => $scope['ownedBrandNames'] ?? [],
@@ -158,7 +163,7 @@ class NotificationController extends Controller
 
         if (!empty($body['all'])) {
             $allRows = DB::table('notifications')
-                ->select(['id', 'audience', 'targetUserId', 'brandName', 'brandId', 'type'])
+                ->select(['id', 'audience', 'targetUserId', 'brandName', 'brandId', 'type', 'entityType'])
                 ->get();
             $inserts = [];
             foreach ($allRows as $row) {

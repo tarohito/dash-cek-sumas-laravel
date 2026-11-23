@@ -556,6 +556,28 @@ export function cloneTemplate(tpl: TagLayoutTemplate): TagLayoutTemplate {
   return JSON.parse(JSON.stringify(tpl));
 }
 
+export function mergeServerTagTemplates(serverTemplates: TagLayoutTemplate[] | null | undefined): TagLayoutTemplate[] {
+  const builtIns = getBuiltInTemplates();
+  if (!Array.isArray(serverTemplates) || serverTemplates.length === 0) {
+    return builtIns;
+  }
+
+  const byId = new Map<string, TagLayoutTemplate>();
+  for (const item of serverTemplates) {
+    if (item && typeof item.id === 'string' && item.sticker && item.sheet && Array.isArray(item.layers)) {
+      byId.set(item.id, item);
+    }
+  }
+
+  const merged: TagLayoutTemplate[] = builtIns.map((b) => byId.get(b.id) ?? b);
+  for (const [id, item] of byId.entries()) {
+    if (!builtIns.some((b) => b.id === id)) {
+      merged.push(item);
+    }
+  }
+  return merged;
+}
+
 export function loadSavedTagTemplates(): TagLayoutTemplate[] {
   const builtIns = getBuiltInTemplates();
   if (typeof window === 'undefined') return builtIns;
@@ -565,22 +587,7 @@ export function loadSavedTagTemplates(): TagLayoutTemplate[] {
     if (!raw) return builtIns;
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return builtIns;
-
-    const customById = new Map<string, TagLayoutTemplate>();
-    for (const item of parsed) {
-      if (item && typeof item.id === 'string' && item.sticker && item.sheet && Array.isArray(item.layers)) {
-        customById.set(item.id, item);
-      }
-    }
-
-    // Keep built-in defaults (allowing edited overrides if stored under same id) + custom templates
-    const merged: TagLayoutTemplate[] = builtIns.map((b) => customById.get(b.id) ?? b);
-    for (const [id, item] of customById.entries()) {
-      if (!builtIns.some((b) => b.id === id)) {
-        merged.push(item);
-      }
-    }
-    return merged;
+    return mergeServerTagTemplates(parsed);
   } catch {
     return builtIns;
   }

@@ -24,6 +24,8 @@ class RbacService
         'batches.allocate',
         'batches.redirect_url',
         'batches.suspend',
+        'batches.download',
+        'batches.layout_edit',
         'scans.view',
         'users.view',
         'users.manage',

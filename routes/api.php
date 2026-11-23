@@ -13,6 +13,7 @@ use App\Http\Controllers\QrVerificationController;
 use App\Http\Controllers\RbacController;
 use App\Http\Controllers\ScanController;
 use App\Http\Controllers\SettingsController;
+use App\Http\Controllers\TagLayoutController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
 
@@ -36,6 +37,11 @@ Route::middleware('throttle:api-global')->group(function () {
         Route::get('/rbac/permissions', [RbacController::class, 'index']);
         Route::put('/rbac/permissions', [RbacController::class, 'update']);
 
+        Route::get('/tag-layouts', [TagLayoutController::class, 'index']);
+        Route::post('/tag-layouts', [TagLayoutController::class, 'upsert']);
+        Route::put('/tag-layouts/active', [TagLayoutController::class, 'setActive']);
+        Route::delete('/tag-layouts/{id}', [TagLayoutController::class, 'destroy']);
+
         Route::get('/dashboard/stats', [DashboardController::class, 'stats']);
 
         Route::get('/scans/locations', [ScanController::class, 'locations']);
@@ -45,7 +51,7 @@ Route::middleware('throttle:api-global')->group(function () {
         Route::get('/batches', [BatchController::class, 'index']);
         Route::post('/batches', [BatchController::class, 'store'])->middleware('throttle:heavy-ops');
         Route::get('/batches/{id}/tags', [BatchController::class, 'tags']);
-        Route::get('/batches/{id}/all-tags', [BatchController::class, 'allTags']);
+        Route::get('/batches/{id}/all-tags', [BatchController::class, 'allTags'])->middleware('throttle:heavy-ops');
         Route::get('/batches/{id}/summary', [BatchController::class, 'summary']);
         Route::patch('/batches/{id}/redirect-url', [BatchController::class, 'updateRedirectUrl']);
         Route::post('/batches/{id}/allocate', [BatchController::class, 'allocate']);

@@ -60,6 +60,7 @@ import { CustomCheckbox } from './CustomCheckbox';
 interface TagLayoutStudioModalProps {
   isOpen: boolean;
   onClose: () => void;
+  canEdit?: boolean;
   templates: TagLayoutTemplate[];
   activeTemplateId: string;
   onSaveTemplate: (template: TagLayoutTemplate, saveAsNew?: boolean) => TagLayoutTemplate;
@@ -202,6 +203,7 @@ const MmNumberInput: React.FC<MmNumberInputProps> = ({
 export const TagLayoutStudioModal: React.FC<TagLayoutStudioModalProps> = ({
   isOpen,
   onClose,
+  canEdit = true,
   templates,
   activeTemplateId,
   onSaveTemplate,
@@ -267,6 +269,10 @@ export const TagLayoutStudioModal: React.FC<TagLayoutStudioModalProps> = ({
   };
 
   useEffect(() => {
+    if (isOpen && !canEdit) {
+      onClose();
+      return;
+    }
     if (isOpen) {
       const target =
         templates.find((t) => t.id === activeTemplateId) ||
@@ -282,7 +288,7 @@ export const TagLayoutStudioModal: React.FC<TagLayoutStudioModalProps> = ({
         setZoom(computeFitZoom(cloned));
       });
     }
-  }, [isOpen, activeTemplateId, templates]);
+  }, [isOpen, canEdit, onClose, activeTemplateId, templates]);
 
   const pxPerMm = BASE_PX_PER_MM * zoom;
   const gridMetrics = useMemo(() => computeSheetGrid(draft), [draft]);
@@ -610,7 +616,7 @@ export const TagLayoutStudioModal: React.FC<TagLayoutStudioModalProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, selectedLayer, selectedLayerIndex, draft.layers.length, historyPast, historyFuture]);
 
-  if (!isOpen) return null;
+  if (!isOpen || !canEdit) return null;
 
   const handleAddLayer = (type: TagLayerType) => {
     const newLayer = createNewLayer(type, draft.sticker.widthMm, draft.sticker.heightMm);
@@ -707,6 +713,7 @@ export const TagLayoutStudioModal: React.FC<TagLayoutStudioModalProps> = ({
   };
 
   const handleSaveCurrent = () => {
+    if (!canEdit) return;
     const saved = onSaveTemplate(draft, false);
     setDraft(cloneTemplate(saved));
     setSavedFeedback('Template disimpan');
@@ -714,6 +721,7 @@ export const TagLayoutStudioModal: React.FC<TagLayoutStudioModalProps> = ({
   };
 
   const handleConfirmSaveAs = () => {
+    if (!canEdit) return;
     const cleanName = saveAsName.trim();
     if (!cleanName) return;
     const copy: TagLayoutTemplate = {
@@ -732,6 +740,7 @@ export const TagLayoutStudioModal: React.FC<TagLayoutStudioModalProps> = ({
   };
 
   const handleConfirmRename = () => {
+    if (!canEdit) return;
     const cleanName = renameValue.trim();
     if (!cleanName) return;
     const renamed: TagLayoutTemplate = {

@@ -40,11 +40,22 @@ class SumasSessionAuth
         $response = $next($request);
 
         $rotated = $request->attributes->get('sumas_rotated_token');
+        $activeCsrf = null;
         if (is_array($rotated) && !empty($rotated['token']) && !empty($rotated['minutes'])) {
             $isHttps = SessionAuthService::isHttpsRequest($request);
+            $activeCsrf = SessionAuthService::deriveCsrfTokenFromRawSession((string) $rotated['token']);
             $response->headers->setCookie(
                 cookie('sumas_session', (string) $rotated['token'], (int) $rotated['minutes'], '/', null, $isHttps, true, false, 'lax')
             );
+            $response->headers->setCookie(
+                cookie('sumas_csrf', $activeCsrf, (int) $rotated['minutes'], '/', null, $isHttps, false, false, 'lax')
+            );
+        } else {
+            $activeCsrf = SessionAuthService::getSessionCsrfToken($request);
+        }
+
+        if ($activeCsrf !== null) {
+            $response->headers->set('X-Sumas-CSRF', $activeCsrf);
         }
 
         return $response;

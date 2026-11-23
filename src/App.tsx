@@ -118,12 +118,13 @@ import {
   getBuiltInTemplates,
   getSelectedTagTemplateId,
   loadSavedTagTemplates,
+  mergeServerTagTemplates,
   saveTagTemplates,
   setSelectedTagTemplateId as persistSelectedTagTemplateId,
   type TagLayoutTemplate,
 } from './utils/tagLayoutTemplate';
 import { compressAndConvertToWebP } from './utils/imageOptimizer';
-import { apiFetch, clearStoredSessionToken } from './utils/authSession';
+import { apiFetch, clearStoredSessionToken, setCsrfToken } from './utils/authSession';
 import { UsernameField, type UsernameFieldStatus } from './components/UsernameField';
 import {
   slugifyUsername as buildUsernameSlug,
@@ -1191,6 +1192,32 @@ export default function App() {
         body: JSON.stringify({ action, actionNote }),
       });
       return parseApiResponse(res, 'Gagal memproses permohonan reset sandi');
+    },
+    async getTagLayouts() {
+      const res = await apiFetch('/api/tag-layouts');
+      return parseApiResponse(res, 'Gagal memuat template layout tag');
+    },
+    async saveTagLayout(template: TagLayoutTemplate) {
+      const res = await apiFetch('/api/tag-layouts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ template }),
+      });
+      return parseApiResponse(res, 'Gagal menyimpan template layout tag');
+    },
+    async setActiveTagLayout(templateId: string) {
+      const res = await apiFetch('/api/tag-layouts/active', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ templateId }),
+      });
+      return parseApiResponse(res, 'Gagal mengatur template aktif');
+    },
+    async deleteTagLayout(id: string) {
+      const res = await apiFetch(`/api/tag-layouts/${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+      });
+      return parseApiResponse(res, 'Gagal menghapus template layout tag');
     }
   };
 
@@ -1476,6 +1503,25 @@ export default function App() {
         .catch(() => {});
     };
 
+    const syncTagLayouts = (syncActiveId = true) => {
+      api.getTagLayouts()
+        .then((data) => {
+          if (!isMounted || !data) return;
+          if (Array.isArray(data.templates)) {
+            const merged = mergeServerTagTemplates(data.templates);
+            setTagTemplates(merged);
+            saveTagTemplates(merged);
+          }
+          if (syncActiveId && typeof data.activeTemplateId === 'string' && data.activeTemplateId.trim()) {
+            setSelectedTagTemplateId(data.activeTemplateId.trim());
+            persistSelectedTagTemplateId(data.activeTemplateId.trim());
+          }
+        })
+        .catch(() => {});
+    };
+
+    syncTagLayouts(true);
+
     // 1. Real-Time Server-Sent Events (SSE) via apiFetch (mendukung Cookie + Bearer Auth di iframe)
     let sseAbortController: AbortController | null = null;
     let sseReconnectTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1517,6 +1563,9 @@ export default function App() {
                 if (frame.includes('rbac') || frame.includes('RBAC-POLICY')) {
                   syncRbacPermissions();
                 }
+                if (frame.includes('tag_layout') || frame.includes('TAG-LAYOUT')) {
+                  syncTagLayouts(true);
+                }
               }
             }
           }
@@ -1540,6 +1589,7 @@ export default function App() {
         loadNotifications({ category: notifCategoryRef.current, offset: 0, append: false, silent: true });
         api.getDashboardStats().then(s => { if (isMounted && s) setDashboardStats(s); }).catch(() => {});
         syncRbacPermissions();
+        syncTagLayouts(false);
       }
     }, 45000);
 
@@ -1547,11 +1597,13 @@ export default function App() {
       if (isMounted && !document.hidden) {
         loadNotifications({ category: notifCategoryRef.current, offset: 0, append: false, silent: true });
         syncRbacPermissions();
+        syncTagLayouts(false);
       }
     };
     const handleWindowFocus = () => {
       if (isMounted) {
         syncRbacPermissions();
+        syncTagLayouts(false);
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -1844,6 +1896,9 @@ export default function App() {
     api.getAuthMe()
       .then((res) => {
         if (!active) return;
+        if (typeof res?.csrfToken === 'string') {
+          setCsrfToken(res.csrfToken);
+        }
         if (res?.matrix) {
           setRbacMatrix(mergeRbacMatrix(res.matrix));
         }
@@ -1868,8 +1923,12 @@ export default function App() {
     user: any;
     permissions?: string[];
     matrix?: RbacMatrix;
+    csrfToken?: string;
     rememberMe?: boolean;
   }) => {
+    if (typeof payload.csrfToken === 'string') {
+      setCsrfToken(payload.csrfToken);
+    }
     if (payload.matrix) {
       setRbacMatrix(mergeRbacMatrix(payload.matrix));
     }
@@ -1954,6 +2013,8 @@ export default function App() {
   const canAllocateBatch = can('batches.allocate');
   const canEditRedirectUrl = can('batches.redirect_url');
   const canSuspendBatch = can('batches.suspend');
+  const canDownloadBatch = can('batches.download');
+  const canEditTagLayout = can('batches.layout_edit');
   const canViewUsers = can('users.view') || can('users.manage');
   const canManageUsers = can('users.manage');
   const canManageSettings = can('settings.manage');
@@ -2142,22 +2203,60 @@ export default function App() {
   const [tagTemplates, setTagTemplates] = useState<TagLayoutTemplate[]>(() => loadSavedTagTemplates());
   const [selectedTagTemplateId, setSelectedTagTemplateId] = useState<string>(() => getSelectedTagTemplateId());
 
+  useEffect(() => {
+    if (isTagStudioOpen && !canEditTagLayout) {
+      setIsTagStudioOpen(false);
+    }
+    if (isDownloadModalOpen && !canDownloadBatch) {
+      setIsDownloadModalOpen(false);
+    }
+  }, [isTagStudioOpen, canEditTagLayout, isDownloadModalOpen, canDownloadBatch]);
+
   const activeTagTemplate =
     tagTemplates.find((t) => t.id === selectedTagTemplateId) ||
     tagTemplates[0] ||
     getBuiltInTemplates()[0];
   const activeTagGrid = computeSheetGrid(activeTagTemplate);
 
-  const handleSelectTagTemplate = (templateId: string) => {
+  const handleOpenTagStudio = () => {
+    if (!canEditTagLayout) {
+      triggerAlert(
+        'Akses Ditolak',
+        'Fitur Edit Layout Tag hanya dapat diakses oleh Super Admin atau peran dengan izin Edit Layout Tag.',
+        'error'
+      );
+      return;
+    }
+    setIsTagStudioOpen(true);
+  };
+
+  const handleSelectTagTemplate = (templateId: string, persistToServer = true) => {
     setSelectedTagTemplateId(templateId);
     persistSelectedTagTemplateId(templateId);
+    if (persistToServer && canEditTagLayout) {
+      api.setActiveTagLayout(templateId).catch((err: any) => {
+        console.warn('Gagal menyinkronkan template aktif ke server:', err);
+      });
+    }
   };
 
   const handleSaveTagTemplate = (template: TagLayoutTemplate, saveAsNew = false): TagLayoutTemplate => {
+    if (!canEditTagLayout) {
+      triggerAlert(
+        'Akses Ditolak',
+        'Anda tidak memiliki izin untuk mengubah atau menyimpan template layout tag.',
+        'error'
+      );
+      return activeTagTemplate;
+    }
+
     const updated: TagLayoutTemplate = {
       ...template,
       updatedAt: new Date().toISOString(),
     };
+    const prevTemplates = tagTemplates;
+    const prevSelectedId = selectedTagTemplateId;
+
     setTagTemplates((prev) => {
       const exists = !saveAsNew && prev.some((t) => t.id === updated.id);
       const next = exists
@@ -2166,19 +2265,78 @@ export default function App() {
       saveTagTemplates(next);
       return next;
     });
-    handleSelectTagTemplate(updated.id);
+    handleSelectTagTemplate(updated.id, false);
+
+    api
+      .saveTagLayout(updated)
+      .then((res) => {
+        if (res && Array.isArray(res.templates)) {
+          const merged = mergeServerTagTemplates(res.templates);
+          setTagTemplates(merged);
+          saveTagTemplates(merged);
+        }
+        if (res && typeof res.activeTemplateId === 'string') {
+          setSelectedTagTemplateId(res.activeTemplateId);
+          persistSelectedTagTemplateId(res.activeTemplateId);
+        }
+      })
+      .catch((err: any) => {
+        setTagTemplates(prevTemplates);
+        saveTagTemplates(prevTemplates);
+        setSelectedTagTemplateId(prevSelectedId);
+        persistSelectedTagTemplateId(prevSelectedId);
+        triggerAlert('Gagal Menyimpan Layout Tag', err?.message || 'Perubahan layout ditolak oleh server.', 'error');
+      });
+
     return updated;
   };
 
   const handleDeleteTagTemplate = (templateId: string) => {
+    if (!canEditTagLayout) {
+      triggerAlert(
+        'Akses Ditolak',
+        'Anda tidak memiliki izin untuk menghapus template layout tag.',
+        'error'
+      );
+      return;
+    }
+
+    const prevTemplates = tagTemplates;
+    const prevSelectedId = selectedTagTemplateId;
+
     setTagTemplates((prev) => {
       const filtered = prev.filter((t) => t.id !== templateId || t.isBuiltIn);
       saveTagTemplates(filtered);
       if (selectedTagTemplateId === templateId && filtered[0]) {
-        handleSelectTagTemplate(filtered[0].id);
+        handleSelectTagTemplate(filtered[0].id, false);
       }
       return filtered;
     });
+
+    api
+      .deleteTagLayout(templateId)
+      .then((res) => {
+        if (res && Array.isArray(res.templates)) {
+          const merged = mergeServerTagTemplates(res.templates);
+          setTagTemplates(merged);
+          saveTagTemplates(merged);
+        }
+        if (res && typeof res.activeTemplateId === 'string') {
+          setSelectedTagTemplateId(res.activeTemplateId);
+          persistSelectedTagTemplateId(res.activeTemplateId);
+        }
+      })
+      .catch((err: any) => {
+        const msg = String(err?.message || '');
+        if (msg.toLowerCase().includes('tidak ditemukan')) {
+          return;
+        }
+        setTagTemplates(prevTemplates);
+        saveTagTemplates(prevTemplates);
+        setSelectedTagTemplateId(prevSelectedId);
+        persistSelectedTagTemplateId(prevSelectedId);
+        triggerAlert('Gagal Menghapus Layout Tag', msg || 'Penghapusan template ditolak oleh server.', 'error');
+      });
   };
   const [activeTab, setActiveTab] = useState('tags'); 
   const [currentTags, setCurrentTags] = useState<any[]>([]); 
@@ -5176,11 +5334,28 @@ export default function App() {
 
   const openDownloadModal = (batch: any) => {
     setOpenDropdownId(null);
+    if (!canDownloadBatch) {
+      triggerAlert(
+        'Akses Ditolak',
+        'Fitur unduh data batch hanya dapat diakses oleh Super Admin atau peran yang memiliki izin Unduh Data Batch.',
+        'error'
+      );
+      return;
+    }
     setBatchToDownload(batch);
     setIsDownloadModalOpen(true);
   };
 
   const handleDownloadPDF = async (templateOverride?: TagLayoutTemplate) => {
+    if (!canDownloadBatch) {
+      setIsDownloadModalOpen(false);
+      triggerAlert(
+        'Akses Ditolak',
+        'Anda tidak memiliki izin untuk mengunduh lembar cetak PDF batch.',
+        'error'
+      );
+      return;
+    }
     if (!batchToDownload) return;
     const batch = batchToDownload;
     const template = templateOverride || activeTagTemplate;
@@ -5236,15 +5411,24 @@ export default function App() {
           'success'
         );
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Gagal membuat file PDF:', err);
-      triggerAlert('Gagal Mengunduh PDF', 'Terjadi kesalahan saat memproses layout PDF.', 'error');
+      triggerAlert('Gagal Mengunduh PDF', err?.message || 'Terjadi kesalahan saat memproses layout PDF.', 'error');
     } finally {
       setIsDownloadingLayout(false);
     }
   };
 
   const handleDownloadExcel = async () => {
+    if (!canDownloadBatch) {
+      setIsDownloadModalOpen(false);
+      triggerAlert(
+        'Akses Ditolak',
+        'Anda tidak memiliki izin untuk mengekspor data tag batch.',
+        'error'
+      );
+      return;
+    }
     if (!batchToDownload) return;
     const batch = batchToDownload;
     setIsDownloadModalOpen(false);
@@ -5276,9 +5460,9 @@ export default function App() {
       } else {
         triggerAlert('Ekspor Berhasil', `File "${result.fileName}" berhasil disimpan.`, 'success');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Gagal ekspor data tag:', err);
-      triggerAlert('Gagal Ekspor Data', 'Terjadi kesalahan saat mengekspor data tag.', 'error');
+      triggerAlert('Gagal Ekspor Data', err?.message || 'Terjadi kesalahan saat mengekspor data tag.', 'error');
     } finally {
       setIsDownloadingExcel(false);
     }
@@ -7601,14 +7785,16 @@ export default function App() {
               </div>
 
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto">
-                <button
-                  type="button"
-                  onClick={() => setIsTagStudioOpen(true)}
-                  className="w-full sm:w-auto h-10 px-4 rounded-full border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 hover:border-[#c28e62] text-slate-700 dark:text-zinc-200 hover:text-[#c28e62] text-xs sm:text-sm font-semibold inline-flex items-center justify-center gap-1.5 transition-all cursor-pointer whitespace-nowrap active:scale-95"
-                >
-                  <Sliders size={15} />
-                  <span>Layout Tag</span>
-                </button>
+                {canEditTagLayout && (
+                  <button
+                    type="button"
+                    onClick={handleOpenTagStudio}
+                    className="w-full sm:w-auto h-10 px-4 rounded-full border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 hover:border-[#c28e62] text-slate-700 dark:text-zinc-200 hover:text-[#c28e62] text-xs sm:text-sm font-semibold inline-flex items-center justify-center gap-1.5 transition-all cursor-pointer whitespace-nowrap active:scale-95"
+                  >
+                    <Sliders size={15} />
+                    <span>Layout Tag</span>
+                  </button>
+                )}
 
                 {canCreateBatch && (
                   <button
@@ -9396,23 +9582,25 @@ export default function App() {
                 >
                   Tutup
                 </button>
-                <button 
-                  type="button"
-                  onClick={() => {
-                    if (activeBatch) {
-                      openDownloadModal(activeBatch);
+                {canDownloadBatch && (
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      if (activeBatch) {
+                        openDownloadModal(activeBatch);
+                      }
+                    }}
+                    className={
+                      canAllocateBatch && isB2BBatch(activeBatch) && activeTab === 'tags' && selectedTagsToAllocate.length > 0
+                        ? 'w-full sm:w-auto h-10 px-5 rounded-full border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-slate-700 dark:text-zinc-200 hover:bg-slate-50 dark:hover:bg-zinc-700 text-xs sm:text-sm font-semibold inline-flex items-center justify-center transition-all cursor-pointer whitespace-nowrap active:scale-95'
+                        : 'w-full sm:w-auto h-10 px-5 rounded-full bg-[#c28e62] hover:bg-[#b07d53] text-white text-xs sm:text-sm font-semibold inline-flex items-center justify-center transition-all cursor-pointer whitespace-nowrap active:scale-95'
                     }
-                  }}
-                  className={
-                    canAllocateBatch && isB2BBatch(activeBatch) && activeTab === 'tags' && selectedTagsToAllocate.length > 0
-                      ? 'w-full sm:w-auto h-10 px-5 rounded-full border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-slate-700 dark:text-zinc-200 hover:bg-slate-50 dark:hover:bg-zinc-700 text-xs sm:text-sm font-semibold inline-flex items-center justify-center transition-all cursor-pointer whitespace-nowrap active:scale-95'
-                      : 'w-full sm:w-auto h-10 px-5 rounded-full bg-[#c28e62] hover:bg-[#b07d53] text-white text-xs sm:text-sm font-semibold inline-flex items-center justify-center transition-all cursor-pointer whitespace-nowrap active:scale-95'
-                  }
-                  data-tooltip="Unduh Lembar Cetak PDF A3+ / File CSV"
-                  data-tooltip-pos="top"
-                >
-                  Unduh
-                </button>
+                    data-tooltip="Unduh Lembar Cetak PDF A3+ / File CSV"
+                    data-tooltip-pos="top"
+                  >
+                    Unduh
+                  </button>
+                )}
                 {canAllocateBatch && isB2BBatch(activeBatch) && activeTab === 'tags' && selectedTagsToAllocate.length > 0 && (
                   <button 
                     type="button"
@@ -9460,12 +9648,14 @@ export default function App() {
             </button>
           )}
           
-          <button 
-            onClick={() => { closeAllActionDropdowns(); openDownloadModal(activeDropdownBatch); }}
-            className="w-full text-left px-4 py-2.5 text-xs sm:text-sm font-medium text-slate-700 dark:text-zinc-300 hover:bg-[#fcf7f3] dark:hover:bg-zinc-700 hover:text-[#c28e62] dark:hover:text-[#c28e62] rounded-full transition-colors flex items-center gap-2 group my-0.5 cursor-pointer"
-          >
-            <Download size={16} className="text-slate-400 dark:text-zinc-500 group-hover:text-[#c28e62] dark:group-hover:text-[#c28e62] transition-colors" /> Unduh
-          </button>
+          {canDownloadBatch && (
+            <button 
+              onClick={() => { closeAllActionDropdowns(); openDownloadModal(activeDropdownBatch); }}
+              className="w-full text-left px-4 py-2.5 text-xs sm:text-sm font-medium text-slate-700 dark:text-zinc-300 hover:bg-[#fcf7f3] dark:hover:bg-zinc-700 hover:text-[#c28e62] dark:hover:text-[#c28e62] rounded-full transition-colors flex items-center gap-2 group my-0.5 cursor-pointer"
+            >
+              <Download size={16} className="text-slate-400 dark:text-zinc-500 group-hover:text-[#c28e62] dark:group-hover:text-[#c28e62] transition-colors" /> Unduh
+            </button>
+          )}
 
           {canEditRedirectUrl && activeDropdownBatch.qrType !== 'static' && (
             <button 
@@ -9830,7 +10020,7 @@ export default function App() {
       )}
 
       {/* MODAL PILIHAN DOWNLOAD (SIMPEL & ELEGAN) */}
-      {isDownloadModalOpen && (
+      {canDownloadBatch && isDownloadModalOpen && (
         <div 
           onClick={(e) => { if (e.target === e.currentTarget) setIsDownloadModalOpen(false); }}
           className="fixed inset-0 bg-black/50 z-[10000] flex items-center justify-center p-3 sm:p-5 backdrop-blur-sm animate-in fade-in duration-200"
@@ -9915,17 +10105,19 @@ export default function App() {
                       }))}
                     />
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsDownloadModalOpen(false);
-                      setIsTagStudioOpen(true);
-                    }}
-                    className="sm:mt-4 h-9 px-4 rounded-full border border-[#c28e62]/40 bg-[#fcf7f3] dark:bg-zinc-800 hover:bg-[#c28e62] text-[#c28e62] hover:text-white text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer shrink-0 active:scale-95"
-                  >
-                    <Sliders size={14} />
-                    <span>Edit Layout</span>
-                  </button>
+                  {canEditTagLayout && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsDownloadModalOpen(false);
+                        handleOpenTagStudio();
+                      }}
+                      className="sm:mt-4 h-9 px-4 rounded-full border border-[#c28e62]/40 bg-[#fcf7f3] dark:bg-zinc-800 hover:bg-[#c28e62] text-[#c28e62] hover:text-white text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer shrink-0 active:scale-95"
+                    >
+                      <Sliders size={14} />
+                      <span>Edit Layout</span>
+                    </button>
+                  )}
                 </div>
 
                 <button
@@ -13078,20 +13270,23 @@ export default function App() {
         document.body
       )}
 
-      <TagLayoutStudioModal
-        isOpen={isTagStudioOpen}
-        onClose={() => setIsTagStudioOpen(false)}
-        templates={tagTemplates}
-        activeTemplateId={activeTagTemplate.id}
-        onSaveTemplate={handleSaveTagTemplate}
-        onDeleteTemplate={handleDeleteTagTemplate}
-        onSelectTemplate={handleSelectTagTemplate}
-        sampleBatch={batchToDownload || batches[0] || null}
-        sampleTag={currentTags[0] || null}
-        onDownloadPdfWithTemplate={
-          batchToDownload ? (tpl) => handleDownloadPDF(tpl) : undefined
-        }
-      />
+      {canEditTagLayout && (
+        <TagLayoutStudioModal
+          isOpen={isTagStudioOpen}
+          onClose={() => setIsTagStudioOpen(false)}
+          canEdit={canEditTagLayout}
+          templates={tagTemplates}
+          activeTemplateId={activeTagTemplate.id}
+          onSaveTemplate={handleSaveTagTemplate}
+          onDeleteTemplate={handleDeleteTagTemplate}
+          onSelectTemplate={handleSelectTagTemplate}
+          sampleBatch={batchToDownload || batches[0] || null}
+          sampleTag={currentTags[0] || null}
+          onDownloadPdfWithTemplate={
+            canDownloadBatch && batchToDownload ? (tpl) => handleDownloadPDF(tpl) : undefined
+          }
+        />
+      )}
 
     </div>
   );

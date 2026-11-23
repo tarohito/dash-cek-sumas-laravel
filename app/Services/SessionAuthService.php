@@ -91,6 +91,22 @@ class SessionAuthService
         return bin2hex(random_bytes(32));
     }
 
+    public static function deriveCsrfTokenFromRawSession(string $rawSessionToken): string
+    {
+        $secret = self::getOrCreateSessionSecret();
+        $tokenHash = self::hashSessionToken($rawSessionToken, $secret);
+        return hash_hmac('sha256', 'sumas_csrf:' . $tokenHash, $secret);
+    }
+
+    public static function getSessionCsrfToken(Request $request): ?string
+    {
+        $rawSession = self::extractSessionToken($request);
+        if (!$rawSession) {
+            return null;
+        }
+        return self::deriveCsrfTokenFromRawSession($rawSession);
+    }
+
     public static function extractUaFamily(?string $userAgent): string
     {
         $ua = strtolower(trim((string) $userAgent));
@@ -127,6 +143,19 @@ class SessionAuthService
         return "{$os}|{$browser}";
     }
 
+    private static function normalizeAuthority(?string $host, ?int $port, string $scheme): string
+    {
+        $h = strtolower(trim((string) $host));
+        if ($h === '') {
+            return '';
+        }
+        $defaultPort = $scheme === 'https' ? 443 : 80;
+        if ($port !== null && $port > 0 && $port !== $defaultPort) {
+            return "{$h}:{$port}";
+        }
+        return $h;
+    }
+
     public static function validateSameOriginAndCsrf(Request $request, bool $requireCsrfToken = true): ?string
     {
         $method = strtoupper($request->getMethod());
@@ -134,18 +163,48 @@ class SessionAuthService
             return null;
         }
 
+        // Fetch Metadata defense-in-depth (modern browsers)
+        $secFetchSite = strtolower(trim((string) $request->header('Sec-Fetch-Site', '')));
+        if ($secFetchSite === 'cross-site') {
+            return 'Permintaan lintas origin ditolak demi keamanan sesi.';
+        }
+
+        $expectedScheme = self::isHttpsRequest($request) ? 'https' : 'http';
         $expectedHost = strtolower($request->getHost());
+        $expectedAuthority = self::normalizeAuthority(
+            $expectedHost,
+            (int) $request->getPort(),
+            $expectedScheme
+        );
+
         $origin = trim((string) $request->header('Origin', ''));
         if ($origin !== '') {
-            $originHost = strtolower((string) parse_url($origin, PHP_URL_HOST));
-            if ($originHost === '' || $originHost !== $expectedHost) {
+            $parsedOrigin = parse_url($origin);
+            $originScheme = strtolower((string) ($parsedOrigin['scheme'] ?? ''));
+            $originAuthority = self::normalizeAuthority(
+                $parsedOrigin['host'] ?? '',
+                isset($parsedOrigin['port']) ? (int) $parsedOrigin['port'] : null,
+                $originScheme ?: $expectedScheme
+            );
+            $originHost = strtolower((string) ($parsedOrigin['host'] ?? ''));
+            if (
+                $originHost === '' ||
+                $originScheme !== $expectedScheme ||
+                ($originAuthority !== $expectedAuthority && $originHost !== $expectedHost)
+            ) {
                 return 'Permintaan lintas origin ditolak demi keamanan sesi.';
+            }
+            // If Origin specifies explicit non-default port and Request specifies port on non-proxied host, ensure exact authority match
+            if (isset($parsedOrigin['port']) && $originAuthority !== $expectedAuthority && !$request->header('x-forwarded-host')) {
+                return 'Permintaan lintas port origin ditolak demi keamanan sesi.';
             }
         } else {
             $referer = trim((string) $request->header('Referer', ''));
             if ($referer !== '') {
-                $refererHost = strtolower((string) parse_url($referer, PHP_URL_HOST));
-                if ($refererHost === '' || $refererHost !== $expectedHost) {
+                $parsedRef = parse_url($referer);
+                $refScheme = strtolower((string) ($parsedRef['scheme'] ?? ''));
+                $refHost = strtolower((string) ($parsedRef['host'] ?? ''));
+                if ($refHost === '' || $refScheme !== $expectedScheme || $refHost !== $expectedHost) {
                     return 'Sumber permintaan tidak valid.';
                 }
             }
@@ -159,8 +218,18 @@ class SessionAuthService
 
             $csrfCookie = trim((string) $request->cookie('sumas_csrf', ''));
             $csrfHeader = trim((string) $request->header('X-Sumas-CSRF', ''));
-            if ($csrfCookie !== '' && ($csrfHeader === '' || !hash_equals($csrfCookie, $csrfHeader))) {
-                return 'Token keamanan CSRF tidak cocok. Muat ulang halaman lalu coba kembali.';
+            $sessionCsrf = self::getSessionCsrfToken($request);
+
+            // When authenticated, require exact match against server session-bound HMAC CSRF token
+            // to prevent subdomain cookie-tossing or unsigned double-submit spoofing.
+            if ($sessionCsrf !== null) {
+                if ($csrfHeader === '' || !hash_equals($sessionCsrf, $csrfHeader)) {
+                    return 'Token keamanan CSRF tidak cocok. Muat ulang halaman lalu coba kembali.';
+                }
+            } elseif ($csrfCookie !== '') {
+                if ($csrfHeader === '' || !hash_equals($csrfCookie, $csrfHeader)) {
+                    return 'Token keamanan CSRF tidak cocok. Muat ulang halaman lalu coba kembali.';
+                }
             }
         }
 

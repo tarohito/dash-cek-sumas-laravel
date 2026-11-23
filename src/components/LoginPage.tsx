@@ -13,7 +13,7 @@ import {
 import { SumasLogo } from './BrandLogo';
 import { CustomCheckbox } from './CustomCheckbox';
 import { RbacMatrix } from '../utils/rbac';
-import { apiFetch } from '../utils/authSession';
+import { apiFetch, setCsrfToken } from '../utils/authSession';
 
 interface LoginPageProps {
   isDarkMode: boolean;
@@ -22,6 +22,7 @@ interface LoginPageProps {
     user: any;
     permissions?: string[];
     matrix?: RbacMatrix;
+    csrfToken?: string;
     rememberMe?: boolean;
   }) => void;
 }
@@ -88,10 +89,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({
         setErrorMessage(data?.error || 'Kredensial tidak valid.');
         return;
       }
+      if (typeof data?.csrfToken === 'string') {
+        setCsrfToken(data.csrfToken);
+      }
       onLoginSuccess({
         user: data.user,
         permissions: data.permissions,
         matrix: data.matrix,
+        csrfToken: data.csrfToken,
         rememberMe,
       });
     } catch {

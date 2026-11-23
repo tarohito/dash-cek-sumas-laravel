@@ -98,7 +98,13 @@ class NotificationService
             return !empty($ctx['userId']) && !empty($row['targetUserId']) && $row['targetUserId'] === $ctx['userId'];
         }
         if ($audience === 'super_admin') {
-            return !empty($ctx['canManageUsers']);
+            if (!empty($ctx['isSuperAdmin'])) {
+                return true;
+            }
+            if (($row['type'] ?? '') === 'password_reset' && !empty($ctx['canManageUsers'])) {
+                return true;
+            }
+            return false;
         }
         if ($audience === 'brand_scope') {
             if (!empty($ctx['isGlobal'])) {

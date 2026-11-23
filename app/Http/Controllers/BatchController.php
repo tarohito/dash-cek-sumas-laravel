@@ -247,8 +247,8 @@ class BatchController extends Controller
 
     public function allTags(Request $request, string $id): JsonResponse
     {
-        if (!$this->canAny($request, 'batches.view', 'dashboard.view')) {
-            return $this->deny($request);
+        if (!$this->can($request, 'batches.download')) {
+            return $this->deny($request, 'Akses ditolak. Fitur unduh data batch & tag hanya dapat diakses oleh akun dengan izin Unduh Data Batch (Super Admin).');
         }
 
         $decodedId = urldecode($id);

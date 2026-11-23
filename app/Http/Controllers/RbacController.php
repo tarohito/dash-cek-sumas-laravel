@@ -42,7 +42,7 @@ class RbacController extends Controller
 
         try {
             DB::table('audit_logs')->insert([
-                'id' => (int) round(microtime(true) * 1000),
+                'id' => ((int) round(microtime(true) * 1000)) + random_int(0, 999),
                 'batchId' => 'RBAC-POLICY',
                 'timestamp' => $nowStr,
                 'user' => $user['name'],

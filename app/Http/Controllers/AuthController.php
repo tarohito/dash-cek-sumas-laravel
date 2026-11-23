@@ -23,7 +23,7 @@ class AuthController extends Controller
                 'authenticated' => false,
                 'user' => null,
                 'permissions' => [],
-                'matrix' => $matrix,
+                'matrix' => null,
             ]);
 
             if ($request->cookie('sumas_session')) {
@@ -35,17 +35,27 @@ class AuthController extends Controller
             return $response;
         }
 
+        $rotated = $request->attributes->get('sumas_rotated_token');
+        $activeRawToken = (is_array($rotated) && !empty($rotated['token']))
+            ? (string) $rotated['token']
+            : (string) SessionAuthService::extractSessionToken($request);
+        $csrfToken = $activeRawToken !== ''
+            ? SessionAuthService::deriveCsrfTokenFromRawSession($activeRawToken)
+            : SessionAuthService::generateCsrfToken();
+
         $response = response()->json([
             'authenticated' => true,
             'user' => $user,
             'permissions' => RbacService::getPermissionsForRole($user['role'] ?? null, $matrix),
             'matrix' => $matrix,
-        ]);
+            'csrfToken' => $csrfToken,
+        ])->header('X-Sumas-CSRF', $csrfToken);
 
-        if (!is_string($request->cookie('sumas_csrf')) || trim((string) $request->cookie('sumas_csrf')) === '') {
+        $existingCsrfCookie = $request->cookie('sumas_csrf');
+        if (!is_string($existingCsrfCookie) || trim($existingCsrfCookie) === '' || !hash_equals($csrfToken, trim($existingCsrfCookie))) {
             $response->cookie(
                 'sumas_csrf',
-                SessionAuthService::generateCsrfToken(),
+                $csrfToken,
                 30 * 24 * 60,
                 '/',
                 null,
@@ -56,7 +66,6 @@ class AuthController extends Controller
             );
         }
 
-        $rotated = $request->attributes->get('sumas_rotated_token');
         if (is_array($rotated) && !empty($rotated['token']) && !empty($rotated['minutes'])) {
             $response->cookie(
                 'sumas_session',
@@ -210,7 +219,7 @@ class AuthController extends Controller
 
         $maxAgeSeconds = $rememberMe ? (30 * 24 * 3600) : (12 * 3600);
         $token = SessionAuthService::createUserSession((string) $userRow->id, $maxAgeSeconds, $request);
-        $csrfToken = SessionAuthService::generateCsrfToken();
+        $csrfToken = SessionAuthService::deriveCsrfTokenFromRawSession($token);
 
         $safeUser = (array) $userRow;
         unset($safeUser['password']);
@@ -227,7 +236,9 @@ class AuthController extends Controller
             'user' => $safeUser,
             'permissions' => $permissions,
             'matrix' => $matrix,
+            'csrfToken' => $csrfToken,
         ])
+            ->header('X-Sumas-CSRF', $csrfToken)
             ->cookie('sumas_session', $token, $minutes, '/', null, $isHttps, true, false, 'lax')
             ->cookie('sumas_csrf', $csrfToken, $minutes, '/', null, $isHttps, false, false, 'lax')
             ->cookie('sumas_logged_out', '', -1, '/', null, $isHttps, false, false, 'lax');
@@ -395,7 +406,7 @@ class AuthController extends Controller
         if ($passwordChanged) {
             SessionAuthService::revokeAllUserSessions((string) $authUser['id']);
             $rotatedSessionToken = SessionAuthService::createUserSession((string) $authUser['id'], 12 * 3600, $request);
-            $rotatedCsrfToken = SessionAuthService::generateCsrfToken();
+            $rotatedCsrfToken = SessionAuthService::deriveCsrfTokenFromRawSession($rotatedSessionToken);
         }
 
         $updated = (array) DB::table('users')
@@ -404,16 +415,22 @@ class AuthController extends Controller
             ->first();
         $updated['role'] = RbacService::normalizeRole($updated['role'] ?? null);
 
-        $response = response()->json([
+        $payload = [
             'success' => true,
             'user' => $updated,
             'passwordUpdated' => $passwordChanged,
-        ]);
+        ];
+        if ($rotatedCsrfToken !== null) {
+            $payload['csrfToken'] = $rotatedCsrfToken;
+        }
+
+        $response = response()->json($payload);
 
         if ($rotatedSessionToken !== null && $rotatedCsrfToken !== null) {
             $isHttps = SessionAuthService::isHttpsRequest($request);
             $minutes = 12 * 60;
             $response
+                ->header('X-Sumas-CSRF', $rotatedCsrfToken)
                 ->cookie('sumas_session', $rotatedSessionToken, $minutes, '/', null, $isHttps, true, false, 'lax')
                 ->cookie('sumas_csrf', $rotatedCsrfToken, $minutes, '/', null, $isHttps, false, false, 'lax');
         }

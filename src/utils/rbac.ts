@@ -17,6 +17,8 @@ export type PermissionKey =
   | 'batches.allocate'
   | 'batches.redirect_url'
   | 'batches.suspend'
+  | 'batches.download'
+  | 'batches.layout_edit'
   | 'scans.view'
   | 'users.view'
   | 'users.manage'
@@ -93,6 +95,8 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { key: 'batches.allocate', label: 'Alokasi Proyek Fisik (B2B)', description: 'Mengalokasikan, menyunting, atau membatalkan alokasi serial tag ke proyek (khusus brand/batch B2B).' },
       { key: 'batches.redirect_url', label: 'Ubah URL & Kebijakan QR', description: 'Mengubah URL tujuan pengalihan QR, PIN wajib, dan pelacakan GPS.' },
       { key: 'batches.suspend', label: 'Suspend / Pulihkan Batch', description: 'Menangguhkan sementara atau mengaktifkan kembali status batch.' },
+      { key: 'batches.download', label: 'Unduh Data Batch (PDF & CSV)', description: 'Mengunduh lembar cetak stiker PDF dan mengekspor seluruh serial tag & PIN (CSV/Excel) batch (bawaan khusus Super Admin).' },
+      { key: 'batches.layout_edit', label: 'Edit Layout Tag & Template Cetak', description: 'Membuka Editor Layout Tag, mengubah ukuran stiker/kertas, serta menyimpan atau menghapus template cetak (bawaan khusus Super Admin).' },
       { key: 'batches.delete', label: 'Hapus Batch Tag', description: 'Menghapus permanen batch beserta seluruh serial tag di dalamnya.' },
     ],
   },
