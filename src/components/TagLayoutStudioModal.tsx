@@ -103,6 +103,102 @@ function roundMm(val: number): number {
   return Math.round(val * 10) / 10;
 }
 
+interface MmNumberInputProps {
+  value: number;
+  onCommit: (nextVal: number) => void;
+  min?: number;
+  max?: number;
+  step?: number;
+  fallback?: number;
+  wrap360?: boolean;
+  className?: string;
+}
+
+const MmNumberInput: React.FC<MmNumberInputProps> = ({
+  value,
+  onCommit,
+  min,
+  max,
+  step = 1,
+  fallback,
+  wrap360 = false,
+  className = '',
+}) => {
+  const [text, setText] = useState<string>(String(value));
+  const isFocusedRef = useRef(false);
+
+  useEffect(() => {
+    if (!isFocusedRef.current) {
+      setText(String(value));
+    }
+  }, [value]);
+
+  const clampAndNormalize = (raw: string): number => {
+    const normalized = raw.replace(',', '.').trim();
+    if (normalized === '' || normalized === '-' || normalized === '.') {
+      return fallback ?? min ?? 0;
+    }
+    let num = Number(normalized);
+    if (!Number.isFinite(num)) {
+      return fallback ?? min ?? 0;
+    }
+    if (wrap360) {
+      num = ((num % 360) + 360) % 360;
+    }
+    if (min !== undefined) num = Math.max(min, num);
+    if (max !== undefined) num = Math.min(max, num);
+    return num;
+  };
+
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      value={text}
+      onFocus={(e) => {
+        isFocusedRef.current = true;
+        e.currentTarget.select();
+      }}
+      onChange={(e) => {
+        const nextText = e.target.value;
+        if (/^-?[0-9]*[.,]?[0-9]*$/.test(nextText)) {
+          setText(nextText);
+          const cleaned = nextText.replace(',', '.').trim();
+          if (cleaned !== '' && cleaned !== '-' && cleaned !== '.') {
+            const parsed = Number(cleaned);
+            if (Number.isFinite(parsed) && (min === undefined || parsed >= min)) {
+              const bounded = max !== undefined ? Math.min(max, parsed) : parsed;
+              onCommit(wrap360 ? ((bounded % 360) + 360) % 360 : bounded);
+            }
+          }
+        }
+      }}
+      onBlur={() => {
+        isFocusedRef.current = false;
+        const finalVal = clampAndNormalize(text);
+        onCommit(finalVal);
+        setText(String(finalVal));
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.currentTarget.blur();
+        } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+          e.preventDefault();
+          const cur = Number(text.replace(',', '.')) || 0;
+          const delta = e.key === 'ArrowUp' ? step : -step;
+          let nextVal = Math.round((cur + delta) * 100) / 100;
+          if (wrap360) nextVal = ((nextVal % 360) + 360) % 360;
+          if (min !== undefined) nextVal = Math.max(min, nextVal);
+          if (max !== undefined) nextVal = Math.min(max, nextVal);
+          setText(String(nextVal));
+          onCommit(nextVal);
+        }
+      }}
+      className={className}
+    />
+  );
+};
+
 export const TagLayoutStudioModal: React.FC<TagLayoutStudioModalProps> = ({
   isOpen,
   onClose,
@@ -1375,47 +1471,43 @@ export const TagLayoutStudioModal: React.FC<TagLayoutStudioModalProps> = ({
                       <div className="grid grid-cols-2 gap-2">
                         <label className="block">
                           <span className="text-[10px] text-slate-500 dark:text-zinc-400">X (mm)</span>
-                          <input
-                            type="number"
-                            step="0.5"
+                          <MmNumberInput
+                            step={0.5}
                             value={selectedLayer.xMm}
-                            onChange={(e) => updateSelectedLayer({ xMm: Number(e.target.value) || 0 })}
+                            fallback={0}
+                            onCommit={(val) => updateSelectedLayer({ xMm: val })}
                             className="mt-0.5 w-full h-8 px-2.5 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs font-mono text-slate-800 dark:text-zinc-100 outline-none focus:border-[#c28e62]"
                           />
                         </label>
                         <label className="block">
                           <span className="text-[10px] text-slate-500 dark:text-zinc-400">Y (mm)</span>
-                          <input
-                            type="number"
-                            step="0.5"
+                          <MmNumberInput
+                            step={0.5}
                             value={selectedLayer.yMm}
-                            onChange={(e) => updateSelectedLayer({ yMm: Number(e.target.value) || 0 })}
+                            fallback={0}
+                            onCommit={(val) => updateSelectedLayer({ yMm: val })}
                             className="mt-0.5 w-full h-8 px-2.5 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs font-mono text-slate-800 dark:text-zinc-100 outline-none focus:border-[#c28e62]"
                           />
                         </label>
                         <label className="block">
                           <span className="text-[10px] text-slate-500 dark:text-zinc-400">Lebar W (mm)</span>
-                          <input
-                            type="number"
-                            step="0.5"
-                            min="1"
+                          <MmNumberInput
+                            step={0.5}
+                            min={1}
+                            fallback={10}
                             value={selectedLayer.widthMm}
-                            onChange={(e) =>
-                              updateSelectedLayer({ widthMm: Math.max(1, Number(e.target.value) || 1) })
-                            }
+                            onCommit={(val) => updateSelectedLayer({ widthMm: val })}
                             className="mt-0.5 w-full h-8 px-2.5 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs font-mono text-slate-800 dark:text-zinc-100 outline-none focus:border-[#c28e62]"
                           />
                         </label>
                         <label className="block">
                           <span className="text-[10px] text-slate-500 dark:text-zinc-400">Tinggi H (mm)</span>
-                          <input
-                            type="number"
-                            step="0.5"
-                            min="1"
+                          <MmNumberInput
+                            step={0.5}
+                            min={1}
+                            fallback={10}
                             value={selectedLayer.heightMm}
-                            onChange={(e) =>
-                              updateSelectedLayer({ heightMm: Math.max(1, Number(e.target.value) || 1) })
-                            }
+                            onCommit={(val) => updateSelectedLayer({ heightMm: val })}
                             className="mt-0.5 w-full h-8 px-2.5 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs font-mono text-slate-800 dark:text-zinc-100 outline-none focus:border-[#c28e62]"
                           />
                         </label>
@@ -1423,15 +1515,12 @@ export const TagLayoutStudioModal: React.FC<TagLayoutStudioModalProps> = ({
                       <div className="mt-2 flex items-center gap-2">
                         <label className="flex-1 block">
                           <span className="text-[10px] text-slate-500 dark:text-zinc-400">Rotasi (°)</span>
-                          <input
-                            type="number"
-                            step="15"
+                          <MmNumberInput
+                            step={15}
+                            wrap360
+                            fallback={0}
                             value={selectedLayer.rotation}
-                            onChange={(e) =>
-                              updateSelectedLayer({
-                                rotation: (((Number(e.target.value) || 0) % 360) + 360) % 360,
-                              })
-                            }
+                            onCommit={(val) => updateSelectedLayer({ rotation: val })}
                             className="mt-0.5 w-full h-8 px-2.5 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs font-mono text-slate-800 dark:text-zinc-100 outline-none focus:border-[#c28e62]"
                           />
                         </label>
@@ -1489,15 +1578,13 @@ export const TagLayoutStudioModal: React.FC<TagLayoutStudioModalProps> = ({
                             <span className="text-[10px] text-slate-500 dark:text-zinc-400">
                               Jarak Baris (mm)
                             </span>
-                            <input
-                              type="number"
-                              step="0.2"
-                              min="1.5"
-                              max="15"
+                            <MmNumberInput
+                              step={0.2}
+                              min={1.5}
+                              max={15}
+                              fallback={4}
                               value={selectedLayer.lineGapMm}
-                              onChange={(e) =>
-                                updateSelectedLayer({ lineGapMm: Math.max(1.5, Number(e.target.value) || 4) })
-                              }
+                              onCommit={(val) => updateSelectedLayer({ lineGapMm: val })}
                               className="mt-0.5 w-full h-8 px-2.5 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs font-mono outline-none focus:border-[#c28e62]"
                             />
                           </label>
@@ -1617,17 +1704,13 @@ export const TagLayoutStudioModal: React.FC<TagLayoutStudioModalProps> = ({
                           </div>
                           <label className="block">
                             <span className="text-[10px] text-slate-500 dark:text-zinc-400">Ukuran (pt)</span>
-                            <input
-                              type="number"
-                              step="0.5"
-                              min="2"
-                              max="72"
+                            <MmNumberInput
+                              step={0.5}
+                              min={2}
+                              max={72}
+                              fallback={6}
                               value={selectedLayer.fontSizePt}
-                              onChange={(e) =>
-                                updateSelectedLayer({
-                                  fontSizePt: Math.max(2, Number(e.target.value) || 6),
-                                })
-                              }
+                              onCommit={(val) => updateSelectedLayer({ fontSizePt: val })}
                               className="mt-0.5 w-full h-8 px-2.5 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs font-mono outline-none focus:border-[#c28e62]"
                             />
                           </label>
@@ -1704,14 +1787,12 @@ export const TagLayoutStudioModal: React.FC<TagLayoutStudioModalProps> = ({
                           </label>
                           <label className="block">
                             <span className="text-[10px] text-slate-500 dark:text-zinc-400">Quiet Zone</span>
-                            <input
-                              type="number"
-                              min="0"
-                              max="4"
+                            <MmNumberInput
+                              min={0}
+                              max={4}
+                              fallback={1}
                               value={selectedLayer.qrMargin}
-                              onChange={(e) =>
-                                updateSelectedLayer({ qrMargin: Math.max(0, Math.min(4, Number(e.target.value) || 0)) })
-                              }
+                              onCommit={(val) => updateSelectedLayer({ qrMargin: Math.round(val) })}
                               className="mt-0.5 w-full h-8 px-2.5 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs font-mono outline-none focus:border-[#c28e62]"
                             />
                           </label>
@@ -1798,27 +1879,23 @@ export const TagLayoutStudioModal: React.FC<TagLayoutStudioModalProps> = ({
                           </label>
                           <label className="block">
                             <span className="text-[10px] text-slate-500 dark:text-zinc-400">Tebal Garis (mm)</span>
-                            <input
-                              type="number"
-                              step="0.1"
-                              min="0"
+                            <MmNumberInput
+                              step={0.1}
+                              min={0}
+                              fallback={0}
                               value={selectedLayer.strokeWidthMm}
-                              onChange={(e) =>
-                                updateSelectedLayer({ strokeWidthMm: Math.max(0, Number(e.target.value) || 0) })
-                              }
+                              onCommit={(val) => updateSelectedLayer({ strokeWidthMm: val })}
                               className="mt-0.5 w-full h-8 px-2.5 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs font-mono outline-none focus:border-[#c28e62]"
                             />
                           </label>
                           <label className="block">
                             <span className="text-[10px] text-slate-500 dark:text-zinc-400">Sudut R (mm)</span>
-                            <input
-                              type="number"
-                              step="0.5"
-                              min="0"
+                            <MmNumberInput
+                              step={0.5}
+                              min={0}
+                              fallback={0}
                               value={selectedLayer.cornerRadiusMm}
-                              onChange={(e) =>
-                                updateSelectedLayer({ cornerRadiusMm: Math.max(0, Number(e.target.value) || 0) })
-                              }
+                              onCommit={(val) => updateSelectedLayer({ cornerRadiusMm: val })}
                               className="mt-0.5 w-full h-8 px-2.5 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs font-mono outline-none focus:border-[#c28e62]"
                             />
                           </label>
@@ -1871,16 +1948,16 @@ export const TagLayoutStudioModal: React.FC<TagLayoutStudioModalProps> = ({
                     <div className="grid grid-cols-2 gap-2">
                       <label className="block">
                         <span className="text-[10px] text-slate-500 dark:text-zinc-400">Lebar Tag (mm)</span>
-                        <input
-                          type="number"
-                          min="8"
-                          max="300"
-                          step="1"
+                        <MmNumberInput
+                          min={5}
+                          max={300}
+                          step={1}
+                          fallback={25}
                           value={draft.sticker.widthMm}
-                          onChange={(e) =>
+                          onCommit={(val) =>
                             updateDraft((prev) => ({
                               ...prev,
-                              sticker: { ...prev.sticker, widthMm: Math.max(8, Number(e.target.value) || 25) },
+                              sticker: { ...prev.sticker, widthMm: val },
                             }))
                           }
                           className="mt-0.5 w-full h-8 px-2.5 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs font-mono outline-none focus:border-[#c28e62]"
@@ -1888,16 +1965,16 @@ export const TagLayoutStudioModal: React.FC<TagLayoutStudioModalProps> = ({
                       </label>
                       <label className="block">
                         <span className="text-[10px] text-slate-500 dark:text-zinc-400">Tinggi Tag (mm)</span>
-                        <input
-                          type="number"
-                          min="8"
-                          max="450"
-                          step="1"
+                        <MmNumberInput
+                          min={5}
+                          max={450}
+                          step={1}
+                          fallback={60}
                           value={draft.sticker.heightMm}
-                          onChange={(e) =>
+                          onCommit={(val) =>
                             updateDraft((prev) => ({
                               ...prev,
-                              sticker: { ...prev.sticker, heightMm: Math.max(8, Number(e.target.value) || 60) },
+                              sticker: { ...prev.sticker, heightMm: val },
                             }))
                           }
                           className="mt-0.5 w-full h-8 px-2.5 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs font-mono outline-none focus:border-[#c28e62]"
@@ -1905,16 +1982,16 @@ export const TagLayoutStudioModal: React.FC<TagLayoutStudioModalProps> = ({
                       </label>
                       <label className="block">
                         <span className="text-[10px] text-slate-500 dark:text-zinc-400">Sudut Rounded R (mm)</span>
-                        <input
-                          type="number"
-                          min="0"
-                          max="50"
-                          step="0.5"
+                        <MmNumberInput
+                          min={0}
+                          max={50}
+                          step={0.5}
+                          fallback={0}
                           value={draft.sticker.cornerRadiusMm}
-                          onChange={(e) =>
+                          onCommit={(val) =>
                             updateDraft((prev) => ({
                               ...prev,
-                              sticker: { ...prev.sticker, cornerRadiusMm: Math.max(0, Number(e.target.value) || 0) },
+                              sticker: { ...prev.sticker, cornerRadiusMm: val },
                             }))
                           }
                           className="mt-0.5 w-full h-8 px-2.5 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs font-mono outline-none focus:border-[#c28e62]"
@@ -2043,19 +2120,15 @@ export const TagLayoutStudioModal: React.FC<TagLayoutStudioModalProps> = ({
                     <div className="grid grid-cols-2 gap-2">
                       <label className="block">
                         <span className="text-[10px] text-slate-500 dark:text-zinc-400">Kertas W (mm)</span>
-                        <input
-                          type="number"
-                          min="30"
-                          max="1200"
+                        <MmNumberInput
+                          min={30}
+                          max={1200}
+                          fallback={310}
                           value={draft.sheet.widthMm}
-                          onChange={(e) =>
+                          onCommit={(val) =>
                             updateDraft((prev) => ({
                               ...prev,
-                              sheet: {
-                                ...prev.sheet,
-                                preset: 'Custom',
-                                widthMm: Math.max(30, Number(e.target.value) || 310),
-                              },
+                              sheet: { ...prev.sheet, preset: 'Custom', widthMm: val },
                             }))
                           }
                           className="mt-0.5 w-full h-8 px-2.5 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs font-mono outline-none focus:border-[#c28e62]"
@@ -2063,19 +2136,15 @@ export const TagLayoutStudioModal: React.FC<TagLayoutStudioModalProps> = ({
                       </label>
                       <label className="block">
                         <span className="text-[10px] text-slate-500 dark:text-zinc-400">Kertas H (mm)</span>
-                        <input
-                          type="number"
-                          min="30"
-                          max="1200"
+                        <MmNumberInput
+                          min={30}
+                          max={1200}
+                          fallback={470}
                           value={draft.sheet.heightMm}
-                          onChange={(e) =>
+                          onCommit={(val) =>
                             updateDraft((prev) => ({
                               ...prev,
-                              sheet: {
-                                ...prev.sheet,
-                                preset: 'Custom',
-                                heightMm: Math.max(30, Number(e.target.value) || 470),
-                              },
+                              sheet: { ...prev.sheet, preset: 'Custom', heightMm: val },
                             }))
                           }
                           className="mt-0.5 w-full h-8 px-2.5 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs font-mono outline-none focus:border-[#c28e62]"
@@ -2083,16 +2152,16 @@ export const TagLayoutStudioModal: React.FC<TagLayoutStudioModalProps> = ({
                       </label>
                       <label className="block">
                         <span className="text-[10px] text-slate-500 dark:text-zinc-400">Jarak X / Gap (mm)</span>
-                        <input
-                          type="number"
-                          min="0"
-                          max="30"
-                          step="0.5"
+                        <MmNumberInput
+                          min={0}
+                          max={30}
+                          step={0.5}
+                          fallback={0}
                           value={draft.sheet.gapXMm}
-                          onChange={(e) =>
+                          onCommit={(val) =>
                             updateDraft((prev) => ({
                               ...prev,
-                              sheet: { ...prev.sheet, gapXMm: Math.max(0, Number(e.target.value) || 0) },
+                              sheet: { ...prev.sheet, gapXMm: val },
                             }))
                           }
                           className="mt-0.5 w-full h-8 px-2.5 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs font-mono outline-none focus:border-[#c28e62]"
@@ -2100,16 +2169,16 @@ export const TagLayoutStudioModal: React.FC<TagLayoutStudioModalProps> = ({
                       </label>
                       <label className="block">
                         <span className="text-[10px] text-slate-500 dark:text-zinc-400">Jarak Y / Gap (mm)</span>
-                        <input
-                          type="number"
-                          min="0"
-                          max="30"
-                          step="0.5"
+                        <MmNumberInput
+                          min={0}
+                          max={30}
+                          step={0.5}
+                          fallback={0}
                           value={draft.sheet.gapYMm}
-                          onChange={(e) =>
+                          onCommit={(val) =>
                             updateDraft((prev) => ({
                               ...prev,
-                              sheet: { ...prev.sheet, gapYMm: Math.max(0, Number(e.target.value) || 0) },
+                              sheet: { ...prev.sheet, gapYMm: val },
                             }))
                           }
                           className="mt-0.5 w-full h-8 px-2.5 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs font-mono outline-none focus:border-[#c28e62]"
@@ -2117,16 +2186,16 @@ export const TagLayoutStudioModal: React.FC<TagLayoutStudioModalProps> = ({
                       </label>
                       <label className="block">
                         <span className="text-[10px] text-slate-500 dark:text-zinc-400">Margin Tepi X (mm)</span>
-                        <input
-                          type="number"
-                          min="0"
-                          max="60"
-                          step="1"
+                        <MmNumberInput
+                          min={0}
+                          max={60}
+                          step={1}
+                          fallback={0}
                           value={draft.sheet.marginXMm}
-                          onChange={(e) =>
+                          onCommit={(val) =>
                             updateDraft((prev) => ({
                               ...prev,
-                              sheet: { ...prev.sheet, marginXMm: Math.max(0, Number(e.target.value) || 0) },
+                              sheet: { ...prev.sheet, marginXMm: val },
                             }))
                           }
                           className="mt-0.5 w-full h-8 px-2.5 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs font-mono outline-none focus:border-[#c28e62]"
@@ -2134,16 +2203,16 @@ export const TagLayoutStudioModal: React.FC<TagLayoutStudioModalProps> = ({
                       </label>
                       <label className="block">
                         <span className="text-[10px] text-slate-500 dark:text-zinc-400">Margin Tepi Y (mm)</span>
-                        <input
-                          type="number"
-                          min="0"
-                          max="60"
-                          step="1"
+                        <MmNumberInput
+                          min={0}
+                          max={60}
+                          step={1}
+                          fallback={0}
                           value={draft.sheet.marginYMm}
-                          onChange={(e) =>
+                          onCommit={(val) =>
                             updateDraft((prev) => ({
                               ...prev,
-                              sheet: { ...prev.sheet, marginYMm: Math.max(0, Number(e.target.value) || 0) },
+                              sheet: { ...prev.sheet, marginYMm: val },
                             }))
                           }
                           className="mt-0.5 w-full h-8 px-2.5 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs font-mono outline-none focus:border-[#c28e62]"
