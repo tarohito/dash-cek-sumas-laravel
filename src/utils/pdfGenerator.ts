@@ -1,6 +1,14 @@
 import { jsPDF } from 'jspdf';
 import QRCode from 'qrcode';
 import { KODE_MONO_BOLD_BASE64 } from './kodeMonoFont';
+import {
+  computeSheetGrid,
+  createOfficialDefaultTemplate,
+  resolveDynamicText,
+  type TagFontFamily,
+  type TagLayer,
+  type TagLayoutTemplate,
+} from './tagLayoutTemplate';
 
 export interface TagItem {
   id: string;
@@ -41,10 +49,10 @@ export async function saveFileWithNativePicker(
           {
             description: `${extension.toUpperCase()} File (*.${extension})`,
             accept: {
-              [mimeType]: [`.${extension}`]
-            }
-          }
-        ]
+              [mimeType]: [`.${extension}`],
+            },
+          },
+        ],
       });
       const writable = await handle.createWritable();
       await writable.write(blob);
@@ -70,20 +78,70 @@ export async function saveFileWithNativePicker(
   return { success: true, fileName: suggestedName, method: 'download' };
 }
 
+function hexToRgb(hex: string | undefined, fallback: [number, number, number] = [0, 0, 0]): [number, number, number] {
+  if (!hex || typeof hex !== 'string') return fallback;
+  const cleaned = hex.trim().replace(/^#/, '');
+  if (cleaned.length === 3) {
+    const r = parseInt(cleaned[0] + cleaned[0], 16);
+    const g = parseInt(cleaned[1] + cleaned[1], 16);
+    const b = parseInt(cleaned[2] + cleaned[2], 16);
+    if (!Number.isNaN(r) && !Number.isNaN(g) && !Number.isNaN(b)) return [r, g, b];
+  } else if (cleaned.length === 6) {
+    const r = parseInt(cleaned.slice(0, 2), 16);
+    const g = parseInt(cleaned.slice(2, 4), 16);
+    const b = parseInt(cleaned.slice(4, 6), 16);
+    if (!Number.isNaN(r) && !Number.isNaN(g) && !Number.isNaN(b)) return [r, g, b];
+  }
+  return fallback;
+}
+
+function rotatePointCW(px: number, py: number, cx: number, cy: number, deg: number): { x: number; y: number } {
+  if (!deg) return { x: px, y: py };
+  const rad = (deg * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  const dx = px - cx;
+  const dy = py - cy;
+  return {
+    x: cx + dx * cos - dy * sin,
+    y: cy + dx * sin + dy * cos,
+  };
+}
+
+function setDocFont(doc: jsPDF, family: TagFontFamily, weight: 'bold' | 'normal'): void {
+  if (family === 'KodeMono') {
+    try {
+      doc.setFont('KodeMono', 'bold');
+      return;
+    } catch {
+      doc.setFont('courier', weight);
+      return;
+    }
+  }
+  doc.setFont(family, weight);
+}
+
 /**
  * Menghasilkan image data URL untuk QR Code menggunakan qrcode library
- * Resolusi 350px untuk ketajaman optimal saat dicetak
  */
-async function createQrCodeDataUrl(payload: string): Promise<string> {
+export async function createQrCodeDataUrl(
+  payload: string,
+  options?: {
+    darkColor?: string;
+    lightColor?: string;
+    margin?: number;
+    errorCorrectionLevel?: 'L' | 'M' | 'Q' | 'H';
+  }
+): Promise<string> {
   try {
     return await QRCode.toDataURL(payload, {
       width: 400,
-      margin: 2, // sudah termasuk area putih di sekeliling qrcodenya
-      errorCorrectionLevel: 'M',
+      margin: options?.margin ?? 2,
+      errorCorrectionLevel: options?.errorCorrectionLevel ?? 'M',
       color: {
-        dark: '#000000',
-        light: '#ffffff'
-      }
+        dark: options?.darkColor || '#000000',
+        light: options?.lightColor || '#ffffff',
+      },
     });
   } catch (err) {
     console.error('Gagal generate QR Code:', err);
@@ -94,39 +152,283 @@ async function createQrCodeDataUrl(payload: string): Promise<string> {
 /**
  * Menentukan isi payload QR Code berdasarkan tipe batch (Statis / Dinamis)
  */
-function getQrCodePayload(batch: BatchItem, tag: TagItem): string {
+export function getQrCodePayload(batch: BatchItem, tag: TagItem): string {
   const base = (batch.redirectUrl || 'https://cek.sumas.id/').trim();
   if (batch.qrType === 'static') {
     return base;
   }
-  // Dinamis: langsung menyematkan ID & PIN agar saat di-scan langsung verifikasi
   const cleanBase = base.replace(/\/+$/, '');
   const separator = cleanBase.includes('?') ? '&' : '/?';
   return `${cleanBase}${separator}id=${encodeURIComponent(tag.tagNumber)}&pin=${encodeURIComponent(tag.pin)}`;
 }
 
+function detectImageFormat(dataUrl: string): 'PNG' | 'JPEG' | 'WEBP' {
+  const lower = dataUrl.slice(0, 40).toLowerCase();
+  if (lower.includes('image/jpeg') || lower.includes('image/jpg')) return 'JPEG';
+  if (lower.includes('image/webp')) return 'WEBP';
+  return 'PNG';
+}
+
+function drawTextLayerInPdf(
+  doc: jsPDF,
+  text: string,
+  layerX: number,
+  layerY: number,
+  layerW: number,
+  layerH: number,
+  rotation: number,
+  align: 'left' | 'center' | 'right',
+  fontFamily: TagFontFamily,
+  fontWeight: 'bold' | 'normal',
+  fontSizePt: number,
+  colorHex: string,
+  yOffsetMm = 0
+): void {
+  if (!text) return;
+  setDocFont(doc, fontFamily, fontWeight);
+  doc.setFontSize(Math.max(2, fontSizePt));
+  const [r, g, b] = hexToRgb(colorHex, [15, 23, 42]);
+  doc.setTextColor(r, g, b);
+
+  const cx = layerX + layerW / 2;
+  const cy = layerY + layerH / 2;
+  const anchorX =
+    align === 'left' ? layerX : align === 'right' ? layerX + layerW : cx;
+  const anchorY = cy + yOffsetMm;
+  const pos = rotatePointCW(anchorX, anchorY, cx, cy, rotation);
+
+  doc.text(text, pos.x, pos.y, {
+    align,
+    baseline: 'middle',
+    ...(rotation ? { angle: -rotation } : {}),
+  });
+}
+
+function renderLayerInPdf(
+  doc: jsPDF,
+  layer: TagLayer,
+  stickerX: number,
+  stickerY: number,
+  batch: BatchItem,
+  tag: TagItem,
+  qrDataUrl?: string
+): void {
+  if (!layer.visible) return;
+
+  const lx = stickerX + layer.xMm;
+  const ly = stickerY + layer.yMm;
+  const lw = Math.max(0.5, layer.widthMm);
+  const lh = Math.max(0.5, layer.heightMm);
+  const rot = layer.rotation || 0;
+
+  switch (layer.type) {
+    case 'shape': {
+      const [fr, fg, fb] = hexToRgb(layer.fillColor, [248, 250, 252]);
+      const [sr, sg, sb] = hexToRgb(layer.strokeColor, [203, 213, 225]);
+      const strokeW = Math.max(0, layer.strokeWidthMm || 0);
+
+      if (layer.shapeType === 'line') {
+        doc.setDrawColor(sr, sg, sb);
+        doc.setLineWidth(Math.max(0.1, strokeW || 0.25));
+        const cx = lx + lw / 2;
+        const cy = ly + lh / 2;
+        const p1 = rotatePointCW(lx, cy, cx, cy, rot);
+        const p2 = rotatePointCW(lx + lw, cy, cx, cy, rot);
+        doc.line(p1.x, p1.y, p2.x, p2.y);
+      } else {
+        const hasFill = !layer.transparentFill;
+        const hasStroke = strokeW > 0;
+        const style = hasFill && hasStroke ? 'FD' : hasFill ? 'F' : hasStroke ? 'S' : null;
+        if (!style) break;
+        if (hasFill) doc.setFillColor(fr, fg, fb);
+        if (hasStroke) {
+          doc.setDrawColor(sr, sg, sb);
+          doc.setLineWidth(strokeW);
+        }
+        const radius = Math.min(layer.cornerRadiusMm || 0, Math.min(lw, lh) / 2);
+        if (radius > 0) {
+          doc.roundedRect(lx, ly, lw, lh, radius, radius, style);
+        } else {
+          doc.rect(lx, ly, lw, lh, style);
+        }
+      }
+      break;
+    }
+
+    case 'emblem': {
+      const [er, eg, eb] = hexToRgb(layer.color, [36, 33, 86]);
+      const cx = lx + lw / 2;
+      const cy = ly + lh / 2;
+      const r = Math.min(lw, lh) / 2;
+      doc.setDrawColor(er, eg, eb);
+      doc.setLineWidth(Math.max(0.15, r * 0.1));
+      doc.circle(cx, cy, r);
+
+      const letter = (layer.letter || 'S').slice(0, 2);
+      const fontPt = Math.max(3, r * 1.75);
+      doc.setFont('times', 'bold');
+      doc.setFontSize(fontPt);
+      doc.setTextColor(er, eg, eb);
+      doc.text(letter, cx, cy, {
+        align: 'center',
+        baseline: 'middle',
+        ...(rot ? { angle: -rot } : {}),
+      });
+      break;
+    }
+
+    case 'brand': {
+      const rawBrand = String(batch.brand || 'SUMAS').slice(0, 24);
+      const brandText = layer.uppercase ? rawBrand.toUpperCase() : rawBrand;
+      drawTextLayerInPdf(
+        doc,
+        brandText,
+        lx,
+        ly,
+        lw,
+        lh,
+        rot,
+        layer.align,
+        layer.fontFamily,
+        layer.fontWeight,
+        layer.fontSizePt,
+        layer.color
+      );
+      break;
+    }
+
+    case 'tagId': {
+      const text = `${layer.prefix ?? ''}${tag.tagNumber || ''}`;
+      drawTextLayerInPdf(
+        doc,
+        text,
+        lx,
+        ly,
+        lw,
+        lh,
+        rot,
+        layer.align,
+        layer.fontFamily,
+        layer.fontWeight,
+        layer.fontSizePt,
+        layer.color
+      );
+      break;
+    }
+
+    case 'text': {
+      const resolved = resolveDynamicText(layer.content, {
+        brand: batch.brand,
+        sku: batch.sku,
+        batchId: batch.batchId,
+        tagNumber: tag.tagNumber,
+        pin: tag.pin,
+      });
+      drawTextLayerInPdf(
+        doc,
+        resolved,
+        lx,
+        ly,
+        lw,
+        lh,
+        rot,
+        layer.align,
+        layer.fontFamily,
+        layer.fontWeight,
+        layer.fontSizePt,
+        layer.color
+      );
+      break;
+    }
+
+    case 'pin': {
+      const rawPin = String(tag.pin || '00000000').replace(/\s+/g, '');
+      const half = Math.ceil(rawPin.length / 2);
+      const isTwoLines = layer.pinMode === '2-line' && rawPin.length > 4;
+
+      if (isTwoLines) {
+        const part1 = rawPin.slice(0, half);
+        const part2 = rawPin.slice(half);
+        const gap = Math.max(1.5, layer.lineGapMm || 4.0);
+        drawTextLayerInPdf(
+          doc,
+          part1,
+          lx,
+          ly,
+          lw,
+          lh,
+          rot,
+          layer.align,
+          layer.fontFamily,
+          layer.fontWeight,
+          layer.fontSizePt,
+          layer.color,
+          -gap / 2
+        );
+        drawTextLayerInPdf(
+          doc,
+          part2,
+          lx,
+          ly,
+          lw,
+          lh,
+          rot,
+          layer.align,
+          layer.fontFamily,
+          layer.fontWeight,
+          layer.fontSizePt,
+          layer.color,
+          gap / 2
+        );
+      } else {
+        drawTextLayerInPdf(
+          doc,
+          rawPin,
+          lx,
+          ly,
+          lw,
+          lh,
+          rot,
+          layer.align,
+          layer.fontFamily,
+          layer.fontWeight,
+          layer.fontSizePt,
+          layer.color
+        );
+      }
+      break;
+    }
+
+    case 'qr': {
+      if (!qrDataUrl) break;
+      doc.addImage(qrDataUrl, 'PNG', lx, ly, lw, lh, undefined, 'FAST');
+      break;
+    }
+  }
+}
+
 /**
- * Render PDF Layout Cetak Stiker Gosok pada format A3+ (310 x 470 mm)
- * Sesuai Panduan Ukuran Resmi:
- * - Total Ukuran Label: 25 mm x 60 mm (sudut rounded halus R2.0 mm, outline cutting merah)
- * - Bagian 1 (Atas): Header Brand & Logo (w: 25 mm, h: 23 mm)
- * - Bagian 2 (Tengah): QR Code (w: 25 mm, h: 25 mm)
- * - Bagian 3 (Bawah): Area Gosok PIN (w: 25 mm, h: 9.6 mm) disusun 2 baris (4 digit atas & 4 digit bawah)
- *   Font: Kode Mono Bold, ukuran pas (13.5 pt), jarak baris atas & bawah rapat (~1.3 mm gap visual)
+ * Render PDF Layout Cetak Stiker berdasarkan Template Custom (ukuran kertas, ukuran stiker, & posisi elemen bebas dalam mm)
  */
-export async function generateA3PlusStickersPdf(
+export async function generateCustomStickersPdf(
   batch: BatchItem,
   tags: TagItem[],
+  template: TagLayoutTemplate,
   onProgress?: (current: number, total: number) => void
 ): Promise<Blob> {
-  // Ukuran kertas A3+: 310 mm x 470 mm
-  const PAGE_WIDTH = 310;
-  const PAGE_HEIGHT = 470;
+  const PAGE_WIDTH = Math.max(20, Number(template.sheet.widthMm) || 310);
+  const PAGE_HEIGHT = Math.max(20, Number(template.sheet.heightMm) || 470);
+  const STICKER_WIDTH = Math.max(5, Number(template.sticker.widthMm) || 25);
+  const STICKER_HEIGHT = Math.max(5, Number(template.sticker.heightMm) || 60);
+  const CORNER_RADIUS = Math.min(
+    Math.max(0, Number(template.sticker.cornerRadiusMm) || 0),
+    Math.min(STICKER_WIDTH, STICKER_HEIGHT) / 2
+  );
 
   const doc = new jsPDF({
-    orientation: 'portrait',
+    orientation: PAGE_WIDTH > PAGE_HEIGHT ? 'landscape' : 'portrait',
     unit: 'mm',
-    format: [PAGE_WIDTH, PAGE_HEIGHT]
+    format: [PAGE_WIDTH, PAGE_HEIGHT],
   });
 
   // Register Kode Mono Bold TrueType Font
@@ -137,168 +439,107 @@ export async function generateA3PlusStickersPdf(
     console.warn('Could not register KodeMono font in jsPDF:', err);
   }
 
-  // Dimensi Label & Grid Layout Sesuai Panduan Ukuran: 25 mm x 60 mm
-  const STICKER_WIDTH = 25; // 25 mm
-  const STICKER_HEIGHT = 60; // 60 mm (total keseluruhan label tag: 25 mm x 60 mm)
-  const CORNER_RADIUS = 2.0; // mm (ujung sudut rounded)
-
-  // Grid layout pada lembar A3+: 10 kolom x 6 baris = 60 stiker per lembar
-  const COLS = 10;
-  const ROWS = 6;
-  const STICKERS_PER_PAGE = COLS * ROWS; // 60 stiker per lembar A3+
-
-  const GAP_X = 3.0; // mm
-  const GAP_Y = 4.0; // mm
-
-  // Hitung offset agar grid simetris dan terpusat di lembar A3+ (Header & Footer dihapus, hanya marking sensor sudut)
-  const totalGridWidth = COLS * STICKER_WIDTH + (COLS - 1) * GAP_X; // 10*25 + 9*3 = 277 mm
-  const totalGridHeight = ROWS * STICKER_HEIGHT + (ROWS - 1) * GAP_Y; // 6*60 + 5*4 = 380 mm
-  const startX = (PAGE_WIDTH - totalGridWidth) / 2; // (310 - 277) / 2 = 16.5 mm
-  const startY = (PAGE_HEIGHT - totalGridHeight) / 2; // (470 - 380) / 2 = 45 mm (simetris di tengah lembar A3+)
-
+  const grid = computeSheetGrid(template);
+  const STICKERS_PER_PAGE = grid.perPage;
   const totalPages = Math.max(1, Math.ceil(tags.length / STICKERS_PER_PAGE));
 
-  // Pre-generate QR Code data URLs
-  const qrCache = new Map<string, string>();
-  for (let idx = 0; idx < tags.length; idx++) {
-    const t = tags[idx];
-    const payload = getQrCodePayload(batch, t);
-    const dataUrl = await createQrCodeDataUrl(payload);
-    qrCache.set(t.tagNumber, dataUrl);
-    if (onProgress && idx % 20 === 0) {
-      onProgress(idx + 1, tags.length);
+  const qrLayers = template.layers.filter((l) => l.type === 'qr' && l.visible);
+  const qrCacheByLayer = new Map<string, Map<string, string>>();
+
+  for (const qrLayer of qrLayers) {
+    if (qrLayer.type !== 'qr') continue;
+    const layerMap = new Map<string, string>();
+    for (let idx = 0; idx < tags.length; idx++) {
+      const t = tags[idx];
+      const payload = getQrCodePayload(batch, t);
+      const dataUrl = await createQrCodeDataUrl(payload, {
+        darkColor: qrLayer.qrDarkColor,
+        lightColor: qrLayer.qrLightColor,
+        margin: qrLayer.qrMargin,
+        errorCorrectionLevel: qrLayer.qrErrorCorrection,
+      });
+      layerMap.set(t.tagNumber, dataUrl);
+      if (onProgress && idx % 20 === 0) {
+        onProgress(idx + 1, tags.length);
+      }
     }
+    qrCacheByLayer.set(qrLayer.id, layerMap);
   }
+
+  const bgImageDataUrl = template.sticker.backgroundImageDataUrl || null;
+  const bgImageFormat = bgImageDataUrl ? detectImageFormat(bgImageDataUrl) : 'PNG';
+  const [bgR, bgG, bgB] = hexToRgb(template.sticker.backgroundColor, [255, 255, 255]);
+  const [cutR, cutG, cutB] = hexToRgb(template.sticker.cutLineColor, [220, 38, 38]);
 
   for (let pageIdx = 0; pageIdx < totalPages; pageIdx++) {
     if (pageIdx > 0) {
-      doc.addPage([PAGE_WIDTH, PAGE_HEIGHT], 'portrait');
+      doc.addPage([PAGE_WIDTH, PAGE_HEIGHT], PAGE_WIDTH > PAGE_HEIGHT ? 'landscape' : 'portrait');
     }
 
     const pageTags = tags.slice(pageIdx * STICKERS_PER_PAGE, (pageIdx + 1) * STICKERS_PER_PAGE);
 
-    // 1. Gambar Tanda Registrasi Percetakan (Crosshair sensor registration marks di 4 sudut lembar A3+)
-    doc.setDrawColor(160, 165, 175);
-    doc.setLineWidth(0.25);
+    // 1. Tanda Registrasi Percetakan di 4 sudut lembar
+    if (template.sheet.showRegistrationMarks) {
+      doc.setDrawColor(160, 165, 175);
+      doc.setLineWidth(0.25);
+      const inset = Math.min(8, Math.max(4, Math.min(PAGE_WIDTH, PAGE_HEIGHT) * 0.04));
+      const markLen = Math.min(7, inset - 1);
+      const corners = [
+        { x: inset, y: inset },
+        { x: PAGE_WIDTH - inset, y: inset },
+        { x: inset, y: PAGE_HEIGHT - inset },
+        { x: PAGE_WIDTH - inset, y: PAGE_HEIGHT - inset },
+      ];
+      corners.forEach((c) => {
+        doc.line(c.x - markLen, c.y, c.x + markLen, c.y);
+        doc.line(c.x, c.y - markLen, c.x, c.y + markLen);
+        doc.circle(c.x, c.y, 2.2);
+      });
+    }
 
-    const markLen = 7;
-    const corners = [
-      { x: 8, y: 8 },
-      { x: PAGE_WIDTH - 8, y: 8 },
-      { x: 8, y: PAGE_HEIGHT - 8 },
-      { x: PAGE_WIDTH - 8, y: PAGE_HEIGHT - 8 }
-    ];
-    corners.forEach(c => {
-      doc.line(c.x - markLen, c.y, c.x + markLen, c.y);
-      doc.line(c.x, c.y - markLen, c.x, c.y + markLen);
-      doc.circle(c.x, c.y, 2.2);
-    });
-
-    // 2. Render Setiap Sel Label Stiker pada Grid (25 mm x 60 mm, Polosan Full Putih, Outline Cutting Merah)
+    // 2. Render tiap stiker sesuai grid
     for (let i = 0; i < pageTags.length; i++) {
       const tag = pageTags[i];
-      const col = i % COLS;
-      const row = Math.floor(i / COLS);
+      const col = i % grid.cols;
+      const row = Math.floor(i / grid.cols);
 
-      const x = startX + col * (STICKER_WIDTH + GAP_X);
-      const y = startY + row * (STICKER_HEIGHT + GAP_Y);
-      const cx = x + STICKER_WIDTH / 2;
+      const x = grid.startXMm + col * (STICKER_WIDTH + template.sheet.gapXMm);
+      const y = grid.startYMm + row * (STICKER_HEIGHT + template.sheet.gapYMm);
 
-      // ==========================================
-      // BACKGROUND LABEL: POLOSAN FULL PUTIH
-      // ==========================================
-      doc.setFillColor(255, 255, 255);
-      doc.roundedRect(x, y, STICKER_WIDTH, STICKER_HEIGHT, CORNER_RADIUS, CORNER_RADIUS, 'F');
-
-      // ==========================================
-      // BAGIAN 1: HEADER & LOGO (w: 25 mm, h: 23 mm)
-      // Rentang vertikal: y s/d y + 23 mm
-      // Semua objek terpusat secara vertikal (vertical center: y + 11.5 mm)
-      // ==========================================
-      // Laurel Wreath Emblem & Monogram (Center: y + 6.0 mm, radius 2.5 mm)
-      doc.setDrawColor(36, 33, 86); // Navy / Dark slate
-      doc.setLineWidth(0.25);
-      doc.circle(cx, y + 6.0, 2.5);
-
-      doc.setFont('times', 'bold');
-      doc.setFontSize(4.4);
-      doc.setTextColor(36, 33, 86);
-      doc.text('S', cx, y + 7.3, { align: 'center' });
-
-      // Brand Name di bawah emblem (e.g. SUMAS)
-      doc.setFont('times', 'bold');
-      doc.setFontSize(5.8);
-      doc.setTextColor(24, 24, 27);
-      const brandClean = (batch.brand || 'SUMAS').toUpperCase().slice(0, 14);
-      doc.text(brandClean, cx, y + 12.0, { align: 'center' });
-
-      // Teks Subtitle 1: ORIGINAL PRODUCT (Ukuran Font: 5)
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(5.0);
-      doc.setTextColor(15, 23, 42); // Black/Slate-900
-      doc.text('ORIGINAL PRODUCT', cx, y + 15.6, { align: 'center' });
-
-      // Teks Subtitle 2: PRODUK ASLI (Ukuran Font: 5, Gap rapat dengan baris atas)
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(5.0);
-      doc.setTextColor(71, 85, 105); // Slate-600
-      doc.text('PRODUK ASLI', cx, y + 18.0, { align: 'center' });
-
-      // ==========================================
-      // BAGIAN 2: QR CODE UKURAN 25 mm x 25 mm
-      // Rentang vertikal: y + 23 mm s/d y + 48 mm
-      // Terpusat vertikal dan horizontal (Center: y + 35.5 mm)
-      // ==========================================
-      const qrDataUrl = qrCache.get(tag.tagNumber);
-      const qrSize = 25.0; // 25 mm x 25 mm persis sesuai panduan
-      const qrX = x; // Pas selebar stiker 25 mm
-      const qrY = y + 23.0; // y + 23.0 s/d y + 48.0 mm
-      if (qrDataUrl) {
-        doc.addImage(qrDataUrl, 'PNG', qrX, qrY, qrSize, qrSize);
-      }
-
-      // ==========================================
-      // BAGIAN 3: PIN AREA (w: 25 mm, h: 12 mm / slot 9.6 mm)
-      // Rentang vertikal: y + 48.0 s/d y + 60.0 mm
-      // Terpusat secara vertikal (Center: y + 54.0 mm)
-      // PIN 2 baris (4 digit atas & 4 digit bawah)
-      // Digit PIN PADAT TANPA SPASI (misal: "0123" dan "4567")
-      // Font: Kode Mono Bold, ukuran font: 14 & gap baris rapat
-      // ==========================================
-      const rawPin = String(tag.pin || '00000000').replace(/\s+/g, '');
-      const half = Math.ceil(rawPin.length / 2);
-      const isMultiLine = rawPin.length > 4;
-
-      // Penulisan digit PIN padat TANPA SPASI tiap digitnya
-      const pinPart1 = isMultiLine ? rawPin.slice(0, half) : rawPin;
-      const pinPart2 = isMultiLine ? rawPin.slice(half) : '';
-
-      try {
-        doc.setFont('KodeMono', 'bold');
-      } catch (_) {
-        doc.setFont('courier', 'bold');
-      }
-      doc.setTextColor(15, 23, 42); // Black/Slate-900
-
-      if (isMultiLine && pinPart2) {
-        // Ukuran font PIN 14.0
-        doc.setFontSize(14.0);
-        // Baris 1: digit atas (baseline y + 53.2 mm)
-        doc.text(pinPart1, cx, y + 53.2, { align: 'center' });
-        // Baris 2: digit bawah (baseline y + 57.5 mm, jarak baseline 4.3 mm, gap rapat & center vertikal)
-        doc.text(pinPart2, cx, y + 57.5, { align: 'center' });
+      // Background warna stiker
+      doc.setFillColor(bgR, bgG, bgB);
+      if (CORNER_RADIUS > 0) {
+        doc.roundedRect(x, y, STICKER_WIDTH, STICKER_HEIGHT, CORNER_RADIUS, CORNER_RADIUS, 'F');
       } else {
-        doc.setFontSize(14.0);
-        // Single line terpusat vertikal pada y + 55.0 mm
-        doc.text(pinPart1, cx, y + 55.0, { align: 'center' });
+        doc.rect(x, y, STICKER_WIDTH, STICKER_HEIGHT, 'F');
       }
 
-      // ==========================================
-      // OUTLINE TIPIS UNTUK CUTTING WARNA MERAH
-      // ==========================================
-      doc.setDrawColor(220, 38, 38); // Merah tajam die-cut
-      doc.setLineWidth(0.18); // Outline tipis
-      doc.roundedRect(x, y, STICKER_WIDTH, STICKER_HEIGHT, CORNER_RADIUS, CORNER_RADIUS, 'S');
+      // Optional uploaded artwork background
+      if (bgImageDataUrl) {
+        try {
+          doc.addImage(bgImageDataUrl, bgImageFormat, x, y, STICKER_WIDTH, STICKER_HEIGHT, 'sticker-bg', 'FAST');
+        } catch {
+          // Abaikan jika image artwork gagal disisipkan
+        }
+      }
+
+      // Render semua layer dari bawah ke atas
+      for (const layer of template.layers) {
+        const qrDataUrl =
+          layer.type === 'qr' ? qrCacheByLayer.get(layer.id)?.get(tag.tagNumber) : undefined;
+        renderLayerInPdf(doc, layer, x, y, batch, tag, qrDataUrl);
+      }
+
+      // Garis potong die-cut
+      if (template.sticker.showCutLine) {
+        doc.setDrawColor(cutR, cutG, cutB);
+        doc.setLineWidth(Math.max(0.08, template.sticker.cutLineWidthMm || 0.18));
+        if (CORNER_RADIUS > 0) {
+          doc.roundedRect(x, y, STICKER_WIDTH, STICKER_HEIGHT, CORNER_RADIUS, CORNER_RADIUS, 'S');
+        } else {
+          doc.rect(x, y, STICKER_WIDTH, STICKER_HEIGHT, 'S');
+        }
+      }
 
       if (onProgress) {
         const overallIdx = pageIdx * STICKERS_PER_PAGE + i + 1;
@@ -311,13 +552,23 @@ export async function generateA3PlusStickersPdf(
 }
 
 /**
+ * Render PDF Layout Cetak Stiker Gosok pada format default A3+ (310 x 470 mm)
+ */
+export async function generateA3PlusStickersPdf(
+  batch: BatchItem,
+  tags: TagItem[],
+  onProgress?: (current: number, total: number) => void
+): Promise<Blob> {
+  return generateCustomStickersPdf(batch, tags, createOfficialDefaultTemplate(), onProgress);
+}
+
+/**
  * Sanitasi sel CSV untuk mencegah CSV / Excel Formula Injection (DDE / =, +, -, @, TAB, CR)
  * serta meng-escape tanda kutip ganda sesuai RFC 4180.
  */
 function sanitizeCsvCell(value: unknown): string {
   const raw = String(value ?? '').replace(/\r?\n/g, ' ');
   const trimmed = raw.trim();
-  // Biarkan tanda strip tunggal '-' sebagai placeholder kosong, tetapi netralkan formula lain
   const needsFormulaGuard =
     trimmed.length > 0 &&
     trimmed !== '-' &&
@@ -343,7 +594,7 @@ export function generateTagsCsv(batch: BatchItem, tags: TagItem[]): Blob {
     'Brand',
     'Produk SKU',
     'Tipe QR',
-    'URL Verifikasi'
+    'URL Verifikasi',
   ];
 
   const rows = tags.map((t, idx) => {
@@ -363,10 +614,10 @@ export function generateTagsCsv(batch: BatchItem, tags: TagItem[]): Blob {
       sanitizeCsvCell(batch.brand),
       sanitizeCsvCell(batch.sku),
       sanitizeCsvCell(batch.qrType === 'static' ? 'QR Statis' : 'QR Dinamis'),
-      sanitizeCsvCell(batch.redirectUrl || 'https://cek.sumas.id/')
+      sanitizeCsvCell(batch.redirectUrl || 'https://cek.sumas.id/'),
     ];
   });
 
-  const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(r => r.join(','))].join('\r\n');
+  const csvContent = '\uFEFF' + [headers.join(','), ...rows.map((r) => r.join(','))].join('\r\n');
   return new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
 }

@@ -110,7 +110,18 @@ import {
   type RbacMatrix,
   type RoleName,
 } from './utils/rbac';
-import { generateA3PlusStickersPdf, generateTagsCsv, saveFileWithNativePicker } from './utils/pdfGenerator';
+import { generateCustomStickersPdf, generateTagsCsv, saveFileWithNativePicker } from './utils/pdfGenerator';
+import { TagLayoutStudioModal } from './components/TagLayoutStudioModal';
+import { TagStickerPreview } from './components/TagStickerPreview';
+import {
+  computeSheetGrid,
+  getBuiltInTemplates,
+  getSelectedTagTemplateId,
+  loadSavedTagTemplates,
+  saveTagTemplates,
+  setSelectedTagTemplateId as persistSelectedTagTemplateId,
+  type TagLayoutTemplate,
+} from './utils/tagLayoutTemplate';
 import { compressAndConvertToWebP } from './utils/imageOptimizer';
 import { apiFetch, clearStoredSessionToken } from './utils/authSession';
 import { UsernameField, type UsernameFieldStatus } from './components/UsernameField';
@@ -2127,6 +2138,48 @@ export default function App() {
   const [batchToDownload, setBatchToDownload] = useState<any>(null); 
   const [batchToDelete, setBatchToDelete] = useState<any>(null); 
   const [showLabelGuide, setShowLabelGuide] = useState(false);
+  const [isTagStudioOpen, setIsTagStudioOpen] = useState(false);
+  const [tagTemplates, setTagTemplates] = useState<TagLayoutTemplate[]>(() => loadSavedTagTemplates());
+  const [selectedTagTemplateId, setSelectedTagTemplateId] = useState<string>(() => getSelectedTagTemplateId());
+
+  const activeTagTemplate =
+    tagTemplates.find((t) => t.id === selectedTagTemplateId) ||
+    tagTemplates[0] ||
+    getBuiltInTemplates()[0];
+  const activeTagGrid = computeSheetGrid(activeTagTemplate);
+
+  const handleSelectTagTemplate = (templateId: string) => {
+    setSelectedTagTemplateId(templateId);
+    persistSelectedTagTemplateId(templateId);
+  };
+
+  const handleSaveTagTemplate = (template: TagLayoutTemplate, saveAsNew = false): TagLayoutTemplate => {
+    const updated: TagLayoutTemplate = {
+      ...template,
+      updatedAt: new Date().toISOString(),
+    };
+    setTagTemplates((prev) => {
+      const exists = !saveAsNew && prev.some((t) => t.id === updated.id);
+      const next = exists
+        ? prev.map((t) => (t.id === updated.id ? updated : t))
+        : [...prev, updated];
+      saveTagTemplates(next);
+      return next;
+    });
+    handleSelectTagTemplate(updated.id);
+    return updated;
+  };
+
+  const handleDeleteTagTemplate = (templateId: string) => {
+    setTagTemplates((prev) => {
+      const filtered = prev.filter((t) => t.id !== templateId || t.isBuiltIn);
+      saveTagTemplates(filtered);
+      if (selectedTagTemplateId === templateId && filtered[0]) {
+        handleSelectTagTemplate(filtered[0].id);
+      }
+      return filtered;
+    });
+  };
   const [activeTab, setActiveTab] = useState('tags'); 
   const [currentTags, setCurrentTags] = useState<any[]>([]); 
   const [tagSearch, setTagSearch] = useState(''); 
@@ -2415,6 +2468,10 @@ export default function App() {
           setIsUnsuspendModalOpen(false);
           return;
         }
+        if (isTagStudioOpen) {
+          setIsTagStudioOpen(false);
+          return;
+        }
         if (isDownloadModalOpen) {
           setIsDownloadModalOpen(false);
           return;
@@ -2525,6 +2582,7 @@ export default function App() {
     isAllocateModalOpen,
     isSuspendModalOpen,
     isUnsuspendModalOpen,
+    isTagStudioOpen,
     isDownloadModalOpen,
     isCreateBatchModalOpen,
     isEditUrlModalOpen,
@@ -5122,12 +5180,20 @@ export default function App() {
     setIsDownloadModalOpen(true);
   };
 
-  const handleDownloadPDF = async () => {
+  const handleDownloadPDF = async (templateOverride?: TagLayoutTemplate) => {
     if (!batchToDownload) return;
     const batch = batchToDownload;
+    const template = templateOverride || activeTagTemplate;
+    const gridInfo = computeSheetGrid(template);
+
     setIsDownloadModalOpen(false);
+    setIsTagStudioOpen(false);
     setIsDownloadingLayout(true);
-    triggerAlert('Menyiapkan Lembar Cetak A3+', `Mengambil seluruh data tag untuk batch "${batch.batchId}"...`, 'info');
+    triggerAlert(
+      `Menyiapkan Lembar Cetak ${template.sheet.preset}`,
+      `Mengambil seluruh data tag untuk batch "${batch.batchId}"...`,
+      'info'
+    );
 
     try {
       // 1. Ambil seluruh data tag dari database
@@ -5139,14 +5205,19 @@ export default function App() {
         return;
       }
 
-      triggerAlert('Merender Layout PDF A3+', `Menata ${tags.length} label pada lembar A3+ (31x47 cm) dengan QR Code & PIN...`, 'info');
+      triggerAlert(
+        `Merender Layout PDF ${template.sheet.preset}`,
+        `Menata ${tags.length} label (${template.sticker.widthMm}×${template.sticker.heightMm} mm · ${gridInfo.perPage}/hlm)...`,
+        'info'
+      );
 
-      // 2. Render PDF A3+ 31 x 47 cm dengan QR Code & PIN di bawahnya
-      const pdfBlob = await generateA3PlusStickersPdf(batch, tags);
+      // 2. Render PDF sesuai template custom
+      const pdfBlob = await generateCustomStickersPdf(batch, tags, template);
 
-      // 3. Nama file default: diawali "Batch" dan dipisahkan underscore
+      // 3. Nama file default
       const cleanBatchId = String(batch.batchId).trim().replace(/[^a-zA-Z0-9_-]/g, '_').replace(/_+/g, '_');
-      const defaultFileName = `Batch_${cleanBatchId}_Label_A3Plus.pdf`;
+      const cleanSheet = String(template.sheet.preset).replace(/[^a-zA-Z0-9_-]/g, '');
+      const defaultFileName = `Batch_${cleanBatchId}_Label_${template.sticker.widthMm}x${template.sticker.heightMm}_${cleanSheet}.pdf`;
 
       // 4. Buka dialog native file picker OS untuk memilih lokasi folder dan nama file
       const result = await saveFileWithNativePicker(
@@ -5161,13 +5232,13 @@ export default function App() {
       } else {
         triggerAlert(
           'Unduh Layout Selesai',
-          `File "${result.fileName}" berhasil disimpan. Siap dicetak di kertas A3+ (31x47 cm).`,
+          `File "${result.fileName}" berhasil disimpan (${template.sticker.widthMm}×${template.sticker.heightMm} mm di kertas ${template.sheet.preset}).`,
           'success'
         );
       }
     } catch (err) {
-      console.error('Gagal membuat file PDF A3+:', err);
-      triggerAlert('Gagal Mengunduh PDF', 'Terjadi kesalahan saat memproses layout PDF A3+.', 'error');
+      console.error('Gagal membuat file PDF:', err);
+      triggerAlert('Gagal Mengunduh PDF', 'Terjadi kesalahan saat memproses layout PDF.', 'error');
     } finally {
       setIsDownloadingLayout(false);
     }
@@ -7529,15 +7600,26 @@ export default function App() {
                 </h2>
               </div>
 
-              {canCreateBatch && (
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full sm:w-auto">
                 <button
                   type="button"
-                  onClick={() => setIsCreateBatchModalOpen(true)}
-                  className="w-full sm:w-auto h-10 px-5 rounded-full bg-[#c28e62] hover:bg-[#b07d53] text-white text-xs sm:text-sm font-semibold inline-flex items-center justify-center transition-all cursor-pointer whitespace-nowrap active:scale-95"
+                  onClick={() => setIsTagStudioOpen(true)}
+                  className="w-full sm:w-auto h-10 px-4 rounded-full border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 hover:border-[#c28e62] text-slate-700 dark:text-zinc-200 hover:text-[#c28e62] text-xs sm:text-sm font-semibold inline-flex items-center justify-center gap-1.5 transition-all cursor-pointer whitespace-nowrap active:scale-95"
                 >
-                  <span>Generate Batch Baru</span>
+                  <Sliders size={15} />
+                  <span>Layout Tag</span>
                 </button>
-              )}
+
+                {canCreateBatch && (
+                  <button
+                    type="button"
+                    onClick={() => setIsCreateBatchModalOpen(true)}
+                    className="w-full sm:w-auto h-10 px-5 rounded-full bg-[#c28e62] hover:bg-[#b07d53] text-white text-xs sm:text-sm font-semibold inline-flex items-center justify-center transition-all cursor-pointer whitespace-nowrap active:scale-95"
+                  >
+                    <span>Generate Batch Baru</span>
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* TABEL RIWAYAT BATCH (TERPADU DALAM SATU CARD SEPERTI TABEL SCAN) */}
@@ -9751,10 +9833,10 @@ export default function App() {
       {isDownloadModalOpen && (
         <div 
           onClick={(e) => { if (e.target === e.currentTarget) setIsDownloadModalOpen(false); }}
-          className="fixed inset-0 bg-black/50 z-[10000] flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-200"
+          className="fixed inset-0 bg-black/50 z-[10000] flex items-center justify-center p-3 sm:p-5 backdrop-blur-sm animate-in fade-in duration-200"
         >
-          <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200 dark:border-zinc-700 w-full max-w-lg overflow-hidden">
-            <div className="px-5 py-4 border-b border-slate-100 dark:border-zinc-800 flex items-center justify-between">
+          <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-slate-200 dark:border-zinc-700 w-full max-w-xl max-h-[86dvh] flex flex-col overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-slate-100 dark:border-zinc-800 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-lg bg-[#c28e62]/10 dark:bg-zinc-800 flex items-center justify-center text-[#c28e62]">
                   <Download size={18} />
@@ -9762,6 +9844,7 @@ export default function App() {
                 <h3 className="text-sm sm:text-base font-bold tracking-tight text-slate-800 dark:text-zinc-100 leading-snug">Unduh Data Batch</h3>
               </div>
               <button 
+                type="button"
                 onClick={() => setIsDownloadModalOpen(false)} 
                 data-tooltip="Tutup" data-tooltip-shortcut="Esc" data-tooltip-pos="bottom" 
                 className="text-slate-400 dark:text-zinc-500 hover:text-slate-600 dark:hover:text-zinc-300 p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
@@ -9770,35 +9853,37 @@ export default function App() {
               </button>
             </div>
             
-            <div className="p-5 sm:p-6">
-              <p className="text-xs sm:text-sm text-slate-500 dark:text-zinc-400 mb-4">
+            <div className="p-5 sm:p-6 overflow-y-auto flex-1 min-h-0">
+              <p className="text-xs sm:text-sm text-slate-500 dark:text-zinc-400 mb-3.5">
                 Pilih format unduhan untuk batch <span className="font-bold text-slate-700 dark:text-zinc-200">{batchToDownload?.batchId}</span>:
               </p>
               
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {/* Opsi 1: PDF */}
                 <button 
-                  onClick={handleDownloadPDF}
-                  className="group flex flex-col text-left p-4 sm:p-5 rounded-xl border border-slate-200 dark:border-zinc-700 hover:border-[#c28e62] dark:hover:border-[#c28e62] hover:bg-[#fcf7f3] dark:hover:bg-zinc-800/60 transition-all bg-white dark:bg-zinc-900 cursor-pointer"
+                  type="button"
+                  onClick={() => handleDownloadPDF()}
+                  className="group flex flex-col text-left p-4 rounded-xl border border-slate-200 dark:border-zinc-700 hover:border-[#c28e62] dark:hover:border-[#c28e62] hover:bg-[#fcf7f3] dark:hover:bg-zinc-800/60 transition-all bg-white dark:bg-zinc-900 cursor-pointer"
                 >
-                  <div className="w-9 h-9 rounded-lg bg-[#fcf7f3] dark:bg-zinc-800 text-[#c28e62] flex items-center justify-center mb-3 group-hover:bg-[#c28e62] group-hover:text-white transition-colors">
-                    <Printer size={18} />
+                  <div className="w-8 h-8 rounded-lg bg-[#fcf7f3] dark:bg-zinc-800 text-[#c28e62] flex items-center justify-center mb-2.5 group-hover:bg-[#c28e62] group-hover:text-white transition-colors">
+                    <Printer size={17} />
                   </div>
                   <h4 className="font-bold text-slate-800 dark:text-zinc-100 text-xs sm:text-sm mb-1 group-hover:text-[#c28e62] transition-colors">
-                    Cetak Stiker (PDF A3+)
+                    Cetak Stiker (PDF {activeTagTemplate.sheet.preset})
                   </h4>
                   <p className="text-[11px] sm:text-xs text-slate-500 dark:text-zinc-400 leading-relaxed">
-                    Layout cetak A3+ siap produksi (60 label per lembar).
+                    {activeTagTemplate.sticker.widthMm}×{activeTagTemplate.sticker.heightMm} mm · {activeTagGrid.perPage} label per lembar ({activeTagGrid.cols}×{activeTagGrid.rows}).
                   </p>
                 </button>
 
                 {/* Opsi 2: Excel */}
                 <button 
+                  type="button"
                   onClick={handleDownloadExcel}
-                  className="group flex flex-col text-left p-4 sm:p-5 rounded-xl border border-slate-200 dark:border-zinc-700 hover:border-emerald-500 dark:hover:border-emerald-500 hover:bg-emerald-50/40 dark:hover:bg-zinc-800/60 transition-all bg-white dark:bg-zinc-900 cursor-pointer"
+                  className="group flex flex-col text-left p-4 rounded-xl border border-slate-200 dark:border-zinc-700 hover:border-emerald-500 dark:hover:border-emerald-500 hover:bg-emerald-50/40 dark:hover:bg-zinc-800/60 transition-all bg-white dark:bg-zinc-900 cursor-pointer"
                 >
-                  <div className="w-9 h-9 rounded-lg bg-emerald-50 dark:bg-zinc-800 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-3 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
-                    <FileSpreadsheet size={18} />
+                  <div className="w-8 h-8 rounded-lg bg-emerald-50 dark:bg-zinc-800 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-2.5 group-hover:bg-emerald-600 group-hover:text-white transition-colors">
+                    <FileSpreadsheet size={17} />
                   </div>
                   <h4 className="font-bold text-slate-800 dark:text-zinc-100 text-xs sm:text-sm mb-1 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors">
                     Data Tag (Excel / CSV)
@@ -9809,8 +9894,40 @@ export default function App() {
                 </button>
               </div>
 
-              {/* Panduan Ukuran & Pratinjau Desain Label Tag (25 x 60 mm) */}
-              <div className="mt-4 pt-3.5 border-t border-slate-100 dark:border-zinc-800">
+              {/* Template Layout & Custom Canvas Studio */}
+              <div className="mt-4 pt-3.5 border-t border-slate-100 dark:border-zinc-800 space-y-2.5">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                  <div className="flex-1 min-w-0">
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500 mb-1">
+                      Template Tag
+                    </label>
+                    <CustomSelect
+                      value={activeTagTemplate.id}
+                      onChange={(val) => handleSelectTagTemplate(val)}
+                      placeholder="Pilih Template"
+                      searchable={tagTemplates.length > 5}
+                      minDropdownWidth={260}
+                      buttonClassName="w-full h-9 px-3.5 rounded-full border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800 text-xs font-semibold text-slate-700 dark:text-zinc-200 hover:border-[#c28e62] cursor-pointer flex items-center justify-between gap-2"
+                      options={tagTemplates.map((tpl) => ({
+                        value: tpl.id,
+                        label: tpl.name,
+                        badge: tpl.sheet.preset,
+                      }))}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsDownloadModalOpen(false);
+                      setIsTagStudioOpen(true);
+                    }}
+                    className="sm:mt-4 h-9 px-4 rounded-full border border-[#c28e62]/40 bg-[#fcf7f3] dark:bg-zinc-800 hover:bg-[#c28e62] text-[#c28e62] hover:text-white text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer shrink-0 active:scale-95"
+                  >
+                    <Sliders size={14} />
+                    <span>Edit Layout</span>
+                  </button>
+                </div>
+
                 <button
                   type="button"
                   onClick={() => setShowLabelGuide(!showLabelGuide)}
@@ -9818,86 +9935,51 @@ export default function App() {
                 >
                   <span className="flex items-center gap-2">
                     <Tag size={14} className="text-[#c28e62]" />
-                    <span>Panduan Ukuran & Pratinjau Label Tag (25 x 60 mm)</span>
+                    <span>
+                      Preview Tag ({activeTagTemplate.sticker.widthMm} × {activeTagTemplate.sticker.heightMm} mm)
+                    </span>
                   </span>
                   <span className="text-[11px] text-slate-400 dark:text-zinc-500 flex items-center gap-1">
-                    {showLabelGuide ? 'Sembunyikan' : 'Lihat Desain'}
+                    {showLabelGuide ? 'Tutup' : 'Lihat'}
                     <ChevronDown size={14} className={`transform transition-transform ${showLabelGuide ? 'rotate-180' : ''}`} />
                   </span>
                 </button>
 
                 {showLabelGuide && (
-                  <div className="mt-3 p-3.5 bg-slate-50 dark:bg-zinc-950/60 rounded-xl border border-slate-200 dark:border-zinc-800 flex flex-col sm:flex-row items-center gap-4">
-                    {/* Visual Tag Mockup at 25:60 aspect ratio */}
-                    <div className="relative shrink-0 flex items-center justify-center p-2 bg-slate-100 dark:bg-zinc-900 rounded-xl border border-slate-200 dark:border-zinc-800">
-                      <div className="relative w-[105px] h-[252px] bg-white rounded-[6px] border-2 border-red-500 flex flex-col items-center justify-between overflow-hidden select-none">
-                        {/* Section 1: Top 25mm x 23mm (23/60 = 38.3% -> ~96px) - Vertically Centered */}
-                        <div className="w-full h-[96px] flex flex-col items-center justify-center px-1.5 py-1 border-b border-dashed border-red-200 bg-white">
-                          <div className="w-6 h-6 rounded-full border border-slate-800 flex items-center justify-center text-[10px] font-bold text-slate-900 font-serif mb-1">
-                            S
-                          </div>
-                          <span className="font-serif font-black text-[11px] tracking-wider text-slate-900 uppercase">
-                            {batchToDownload?.brand || 'SUMAS'}
-                          </span>
-                          <div className="flex flex-col items-center justify-center mt-1 space-y-[0.5px]">
-                            <span className="font-sans font-black text-[7.5px] tracking-wider text-slate-900 leading-tight">
-                              ORIGINAL PRODUCT
-                            </span>
-                            <span className="font-sans font-bold text-[6.5px] tracking-wider text-slate-600 leading-tight">
-                              PRODUK ASLI
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* Section 2: QR Code 25mm x 25mm (25/60 = 41.7% -> ~105px) - Vertically Centered */}
-                        <div className="w-full h-[105px] flex items-center justify-center p-1 border-b border-dashed border-red-200 bg-white">
-                          <div className="w-[90px] h-[90px] flex items-center justify-center bg-white">
-                            <QrCode size={86} className="text-black" />
-                          </div>
-                        </div>
-
-                        {/* Section 3: PIN Area 25mm x 12mm / slot 9.6mm (~51px) - Vertically Centered */}
-                        <div className="w-full h-[51px] flex flex-col items-center justify-center bg-white px-1">
-                          <div className="font-kode-mono font-bold text-[17px] leading-[1.0] text-slate-900 text-center tracking-normal">
-                            <div>0123</div>
-                            <div className="mt-[1px]">4567</div>
-                          </div>
-                        </div>
-                      </div>
+                  <div className="mt-2 p-3 bg-slate-50 dark:bg-zinc-950/60 rounded-xl border border-slate-200 dark:border-zinc-800 flex flex-col sm:flex-row items-center gap-3.5">
+                    <div className="relative shrink-0 flex items-center justify-center p-2.5 bg-slate-100 dark:bg-zinc-900 rounded-xl border border-slate-200 dark:border-zinc-800">
+                      <TagStickerPreview
+                        template={activeTagTemplate}
+                        pxPerMm={Math.min(
+                          3.4,
+                          140 / Math.max(10, activeTagTemplate.sticker.widthMm),
+                          155 / Math.max(10, activeTagTemplate.sticker.heightMm)
+                        )}
+                        sampleBatch={batchToDownload}
+                      />
                     </div>
 
-                    {/* Specifications List */}
-                    <div className="flex-1 text-left space-y-2">
-                      <div className="flex items-start gap-2">
-                        <span className="w-2 h-2 rounded-full bg-red-500 mt-1.5 shrink-0"></span>
-                        <div>
-                          <div className="text-xs font-bold text-slate-800 dark:text-zinc-200">Total Ukuran Label: 25 mm x 60 mm</div>
-                          <div className="text-[11px] text-slate-500 dark:text-zinc-400">Background full putih, sudut rounded R2 mm, dan garis potong die-cut merah. Semua objek center vertikal.</div>
+                    <div className="flex-1 min-w-0 text-left space-y-2 text-xs">
+                      <div>
+                        <div className="font-bold text-slate-800 dark:text-zinc-200 truncate">{activeTagTemplate.name}</div>
+                        <div className="text-[11px] text-slate-500 dark:text-zinc-400 line-clamp-2">{activeTagTemplate.description}</div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 pt-0.5 text-[11px]">
+                        <div className="p-2 rounded-lg bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800">
+                          <div className="text-slate-400 dark:text-zinc-500">Ukuran Stiker</div>
+                          <div className="font-mono font-bold text-slate-700 dark:text-zinc-200">
+                            {activeTagTemplate.sticker.widthMm} × {activeTagTemplate.sticker.heightMm} mm
+                          </div>
+                        </div>
+                        <div className="p-2 rounded-lg bg-white dark:bg-zinc-900 border border-slate-200 dark:border-zinc-800">
+                          <div className="text-slate-400 dark:text-zinc-500">Kertas &amp; Isi</div>
+                          <div className="font-mono font-bold text-slate-700 dark:text-zinc-200">
+                            {activeTagTemplate.sheet.preset} · {activeTagGrid.perPage}/hlm
+                          </div>
                         </div>
                       </div>
-
-                      <div className="flex items-start gap-2">
-                        <span className="w-2 h-2 rounded-full bg-indigo-500 mt-1.5 shrink-0"></span>
-                        <div>
-                          <div className="text-xs font-bold text-slate-800 dark:text-zinc-200">Bagian Atas: 25 mm x 23 mm (Center Vertikal)</div>
-                          <div className="text-[11px] text-slate-500 dark:text-zinc-400">Emblem Wreath, brand SUMAS, dan tulisan <span className="font-semibold">ORIGINAL PRODUCT & PRODUK ASLI</span> lebih besar dengan jarak rapat.</div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-start gap-2">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500 mt-1.5 shrink-0"></span>
-                        <div>
-                          <div className="text-xs font-bold text-slate-800 dark:text-zinc-200">Bagian Tengah: 25 mm x 25 mm (Center Vertikal)</div>
-                          <div className="text-[11px] text-slate-500 dark:text-zinc-400">QR Code presisi 25x25 mm terpusat sempurna.</div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-start gap-2">
-                        <span className="w-2 h-2 rounded-full bg-amber-500 mt-1.5 shrink-0"></span>
-                        <div>
-                          <div className="text-xs font-bold text-slate-800 dark:text-zinc-200">Bagian Bawah: 25 mm x 12 mm / slot 9.6 mm (Center Vertikal)</div>
-                          <div className="text-[11px] text-slate-500 dark:text-zinc-400">PIN 2 baris (4 digit atas & 4 digit bawah) <span className="font-semibold">tanpa spasi antar digit</span> (misal: 0123 / 4567) dengan font <span className="font-kode-mono font-bold">Kode Mono Bold (18 pt)</span> dan gap rapat.</div>
-                        </div>
+                      <div className="text-[11px] text-slate-500 dark:text-zinc-400 leading-relaxed">
+                        Elemen aktif: {activeTagTemplate.layers.filter((l) => l.visible).map((l) => l.label).join(', ')}.
                       </div>
                     </div>
                   </div>
@@ -9905,7 +9987,7 @@ export default function App() {
               </div>
             </div>
             
-            <div className="px-5 py-3.5 bg-slate-50 dark:bg-zinc-800/50 border-t border-slate-100 dark:border-zinc-800 flex justify-end">
+            <div className="px-5 py-3.5 bg-slate-50 dark:bg-zinc-800/50 border-t border-slate-100 dark:border-zinc-800 flex justify-end shrink-0">
               <button 
                 type="button"
                 onClick={() => setIsDownloadModalOpen(false)} 
@@ -12995,6 +13077,21 @@ export default function App() {
         </div>,
         document.body
       )}
+
+      <TagLayoutStudioModal
+        isOpen={isTagStudioOpen}
+        onClose={() => setIsTagStudioOpen(false)}
+        templates={tagTemplates}
+        activeTemplateId={activeTagTemplate.id}
+        onSaveTemplate={handleSaveTagTemplate}
+        onDeleteTemplate={handleDeleteTagTemplate}
+        onSelectTemplate={handleSelectTagTemplate}
+        sampleBatch={batchToDownload || batches[0] || null}
+        sampleTag={currentTags[0] || null}
+        onDownloadPdfWithTemplate={
+          batchToDownload ? (tpl) => handleDownloadPDF(tpl) : undefined
+        }
+      />
 
     </div>
   );
