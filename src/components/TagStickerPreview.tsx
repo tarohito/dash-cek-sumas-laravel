@@ -28,10 +28,12 @@ interface TagStickerPreviewProps {
   sampleTag?: Partial<TagItem>;
   interactive?: boolean;
   selectedLayerId?: string | null;
+  selectedLayerIds?: string[];
   onLayerPointerDown?: (e: React.PointerEvent, layer: TagLayer) => void;
   onResizePointerDown?: (e: React.PointerEvent, layer: TagLayer, handle: string) => void;
   onRotatePointerDown?: (e: React.PointerEvent, layer: TagLayer) => void;
   onArtboardClick?: () => void;
+  onArtboardPointerDown?: (e: React.PointerEvent) => void;
   snapGuides?: { xMm: number | null; yMm: number | null };
   showGrid?: boolean;
 }
@@ -43,10 +45,12 @@ export const TagStickerPreview: React.FC<TagStickerPreviewProps> = ({
   sampleTag,
   interactive = false,
   selectedLayerId = null,
+  selectedLayerIds,
   onLayerPointerDown,
   onResizePointerDown,
   onRotatePointerDown,
   onArtboardClick,
+  onArtboardPointerDown,
   snapGuides,
   showGrid = false,
 }) => {
@@ -127,7 +131,10 @@ export const TagStickerPreview: React.FC<TagStickerPreviewProps> = ({
   return (
     <div
       onPointerDown={(e) => {
-        if (interactive && e.target === e.currentTarget && onArtboardClick) {
+        if (!interactive || e.target !== e.currentTarget) return;
+        if (onArtboardPointerDown) {
+          onArtboardPointerDown(e);
+        } else if (onArtboardClick) {
           onArtboardClick();
         }
       }}
@@ -140,7 +147,10 @@ export const TagStickerPreview: React.FC<TagStickerPreviewProps> = ({
       {/* Sticker Surface (clipped to corner radius) */}
       <div
         onPointerDown={(e) => {
-          if (interactive && e.target === e.currentTarget && onArtboardClick) {
+          if (!interactive || e.target !== e.currentTarget) return;
+          if (onArtboardPointerDown) {
+            onArtboardPointerDown(e);
+          } else if (onArtboardClick) {
             onArtboardClick();
           }
         }}
@@ -396,75 +406,134 @@ export const TagStickerPreview: React.FC<TagStickerPreviewProps> = ({
 
       {/* Interactive Selection Bounding Box + Resize Handles + Rotate Handle (outside clipped container!) */}
       {interactive &&
-        selectedLayerId &&
         (() => {
-          const sel = template.layers.find((l) => l.id === selectedLayerId && l.visible);
-          if (!sel) return null;
-          const left = sel.xMm * pxPerMm;
-          const top = sel.yMm * pxPerMm;
-          const width = Math.max(4, sel.widthMm * pxPerMm);
-          const height = Math.max(4, sel.heightMm * pxPerMm);
-          const handles = [
-            { id: 'nw', cls: '-top-1 -left-1 cursor-nwse-resize' },
-            { id: 'n', cls: '-top-1 left-1/2 -translate-x-1/2 cursor-ns-resize' },
-            { id: 'ne', cls: '-top-1 -right-1 cursor-nesw-resize' },
-            { id: 'e', cls: 'top-1/2 -right-1 -translate-y-1/2 cursor-ew-resize' },
-            { id: 'se', cls: '-bottom-1 -right-1 cursor-nwse-resize' },
-            { id: 's', cls: '-bottom-1 left-1/2 -translate-x-1/2 cursor-ns-resize' },
-            { id: 'sw', cls: '-bottom-1 -left-1 cursor-nesw-resize' },
-            { id: 'w', cls: 'top-1/2 -left-1 -translate-y-1/2 cursor-ew-resize' },
-          ];
+          const activeSelectedIds = selectedLayerIds ?? (selectedLayerId ? [selectedLayerId] : []);
+          if (activeSelectedIds.length === 0) return null;
+          const selectedLayers = template.layers.filter(
+            (l) => l.visible && activeSelectedIds.includes(l.id)
+          );
+          if (selectedLayers.length === 0) return null;
+
+          if (selectedLayers.length === 1) {
+            const sel = selectedLayers[0];
+            const left = sel.xMm * pxPerMm;
+            const top = sel.yMm * pxPerMm;
+            const width = Math.max(4, sel.widthMm * pxPerMm);
+            const height = Math.max(4, sel.heightMm * pxPerMm);
+            const handles = [
+              { id: 'nw', cls: '-top-1 -left-1 cursor-nwse-resize' },
+              { id: 'n', cls: '-top-1 left-1/2 -translate-x-1/2 cursor-ns-resize' },
+              { id: 'ne', cls: '-top-1 -right-1 cursor-nesw-resize' },
+              { id: 'e', cls: 'top-1/2 -right-1 -translate-y-1/2 cursor-ew-resize' },
+              { id: 'se', cls: '-bottom-1 -right-1 cursor-nwse-resize' },
+              { id: 's', cls: '-bottom-1 left-1/2 -translate-x-1/2 cursor-ns-resize' },
+              { id: 'sw', cls: '-bottom-1 -left-1 cursor-nesw-resize' },
+              { id: 'w', cls: 'top-1/2 -left-1 -translate-y-1/2 cursor-ew-resize' },
+            ];
+
+            return (
+              <div
+                onPointerDown={(e) => {
+                  if (sel.locked || !onLayerPointerDown) return;
+                  e.stopPropagation();
+                  onLayerPointerDown(e, sel);
+                }}
+                className={`absolute z-40 border-[1.5px] border-[#0284c7] ${
+                  sel.locked ? 'border-dashed opacity-70 cursor-not-allowed' : 'cursor-move'
+                }`}
+                style={{
+                  left: `${left}px`,
+                  top: `${top}px`,
+                  width: `${width}px`,
+                  height: `${height}px`,
+                  transform: sel.rotation ? `rotate(${sel.rotation}deg)` : undefined,
+                  transformOrigin: 'center center',
+                }}
+              >
+                {!sel.locked && (
+                  <>
+                    {/* Rotation Handle */}
+                    <div
+                      onPointerDown={(e) => {
+                        if (!onRotatePointerDown) return;
+                        e.stopPropagation();
+                        onRotatePointerDown(e, sel);
+                      }}
+                      title="Putar Elemen (Tahan Shift untuk snap 15°)"
+                      className="absolute -top-6 left-1/2 -translate-x-1/2 flex flex-col items-center cursor-grab active:cursor-grabbing"
+                    >
+                      <div className="w-3 h-3 rounded-full bg-white border-2 border-[#0284c7] hover:bg-[#0284c7]" />
+                      <div className="w-px h-3 bg-[#0284c7]" />
+                    </div>
+
+                    {/* 8 Resize Handles */}
+                    {handles.map((h) => (
+                      <div
+                        key={h.id}
+                        onPointerDown={(e) => {
+                          if (!onResizePointerDown) return;
+                          e.stopPropagation();
+                          onResizePointerDown(e, sel, h.id);
+                        }}
+                        className={`absolute w-2.5 h-2.5 bg-white border-[1.5px] border-[#0284c7] rounded-[1px] hover:bg-[#0284c7] ${h.cls}`}
+                      />
+                    ))}
+                  </>
+                )}
+              </div>
+            );
+          }
+
+          // Multi-selection: render individual layer frames + combined bounding box
+          const minX = Math.min(...selectedLayers.map((l) => l.xMm)) * pxPerMm;
+          const minY = Math.min(...selectedLayers.map((l) => l.yMm)) * pxPerMm;
+          const maxX = Math.max(...selectedLayers.map((l) => l.xMm + l.widthMm)) * pxPerMm;
+          const maxY = Math.max(...selectedLayers.map((l) => l.yMm + l.heightMm)) * pxPerMm;
 
           return (
-            <div
-              onPointerDown={(e) => {
-                if (sel.locked || !onLayerPointerDown) return;
-                e.stopPropagation();
-                onLayerPointerDown(e, sel);
-              }}
-              className={`absolute z-40 border-[1.5px] border-[#0284c7] ${
-                sel.locked ? 'border-dashed opacity-70 cursor-not-allowed' : 'cursor-move'
-              }`}
-              style={{
-                left: `${left}px`,
-                top: `${top}px`,
-                width: `${width}px`,
-                height: `${height}px`,
-                transform: sel.rotation ? `rotate(${sel.rotation}deg)` : undefined,
-                transformOrigin: 'center center',
-              }}
-            >
-              {!sel.locked && (
-                <>
-                  {/* Rotation Handle */}
+            <>
+              <div
+                aria-hidden="true"
+                className="absolute z-30 border border-dashed border-[#0284c7]/75 pointer-events-none"
+                style={{
+                  left: `${minX}px`,
+                  top: `${minY}px`,
+                  width: `${Math.max(4, maxX - minX)}px`,
+                  height: `${Math.max(4, maxY - minY)}px`,
+                }}
+              >
+                <span className="absolute -top-5 left-0 px-1.5 py-0.5 rounded bg-[#0284c7] text-white text-[9px] font-mono font-bold whitespace-nowrap shadow-sm">
+                  {selectedLayers.length} layer
+                </span>
+              </div>
+              {selectedLayers.map((sel) => {
+                const left = sel.xMm * pxPerMm;
+                const top = sel.yMm * pxPerMm;
+                const width = Math.max(4, sel.widthMm * pxPerMm);
+                const height = Math.max(4, sel.heightMm * pxPerMm);
+                return (
                   <div
+                    key={sel.id}
                     onPointerDown={(e) => {
-                      if (!onRotatePointerDown) return;
+                      if (sel.locked || !onLayerPointerDown) return;
                       e.stopPropagation();
-                      onRotatePointerDown(e, sel);
+                      onLayerPointerDown(e, sel);
                     }}
-                    title="Putar Elemen (Tahan Shift untuk snap 15°)"
-                    className="absolute -top-6 left-1/2 -translate-x-1/2 flex flex-col items-center cursor-grab active:cursor-grabbing"
-                  >
-                    <div className="w-3 h-3 rounded-full bg-white border-2 border-[#0284c7] hover:bg-[#0284c7]" />
-                    <div className="w-px h-3 bg-[#0284c7]" />
-                  </div>
-
-                  {/* 8 Resize Handles */}
-                  {handles.map((h) => (
-                    <div
-                      key={h.id}
-                      onPointerDown={(e) => {
-                        if (!onResizePointerDown) return;
-                        e.stopPropagation();
-                        onResizePointerDown(e, sel, h.id);
-                      }}
-                      className={`absolute w-2.5 h-2.5 bg-white border-[1.5px] border-[#0284c7] rounded-[1px] hover:bg-[#0284c7] ${h.cls}`}
-                    />
-                  ))}
-                </>
-              )}
-            </div>
+                    className={`absolute z-40 border-[1.5px] border-[#0284c7] ${
+                      sel.locked ? 'border-dashed opacity-70 cursor-not-allowed' : 'cursor-move'
+                    }`}
+                    style={{
+                      left: `${left}px`,
+                      top: `${top}px`,
+                      width: `${width}px`,
+                      height: `${height}px`,
+                      transform: sel.rotation ? `rotate(${sel.rotation}deg)` : undefined,
+                      transformOrigin: 'center center',
+                    }}
+                  />
+                );
+              })}
+            </>
           );
         })()}
     </div>

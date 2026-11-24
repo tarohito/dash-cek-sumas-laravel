@@ -77,11 +77,20 @@ const BASE_PX_PER_MM = 5.5;
 type DragMode =
   | {
       kind: 'move';
-      layerId: string;
+      primaryLayerId: string;
       startClientX: number;
       startClientY: number;
-      origXMm: number;
-      origYMm: number;
+      items: Array<{
+        id: string;
+        origXMm: number;
+        origYMm: number;
+      }>;
+      origBounds: {
+        minX: number;
+        minY: number;
+        maxX: number;
+        maxY: number;
+      };
     }
   | {
       kind: 'resize';
@@ -99,6 +108,15 @@ type DragMode =
       layerId: string;
       centerX: number;
       centerY: number;
+    }
+  | {
+      kind: 'marquee';
+      startClientX: number;
+      startClientY: number;
+      currentClientX: number;
+      currentClientY: number;
+      additive: boolean;
+      baseSelection: string[];
     };
 
 function roundMm(val: number): number {
@@ -228,9 +246,15 @@ export const TagLayoutStudioModal: React.FC<TagLayoutStudioModalProps> = ({
   const [draft, setDraft] = useState<TagLayoutTemplate>(initialTemplate);
   const [historyPast, setHistoryPast] = useState<TagLayoutTemplate[]>([]);
   const [historyFuture, setHistoryFuture] = useState<TagLayoutTemplate[]>([]);
-  const [selectedLayerId, setSelectedLayerId] = useState<string | null>(
-    initialTemplate.layers[0]?.id ?? null
+  const [selectedLayerIds, setSelectedLayerIds] = useState<string[]>(() =>
+    initialTemplate.layers[0]?.id ? [initialTemplate.layers[0].id] : []
   );
+  const [marqueeRect, setMarqueeRect] = useState<{
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+  } | null>(null);
   const [inspectorTab, setInspectorTab] = useState<'layer' | 'artboard'>('layer');
   const [zoom, setZoom] = useState<number>(1.35);
   const [showGrid, setShowGrid] = useState<boolean>(true);
@@ -260,6 +284,13 @@ export const TagLayoutStudioModal: React.FC<TagLayoutStudioModalProps> = ({
   const canvasViewportRef = useRef<HTMLElement | null>(null);
   const artboardRef = useRef<HTMLDivElement | null>(null);
   const artworkInputRef = useRef<HTMLInputElement | null>(null);
+  const lastClickedLayerIdRef = useRef<string | null>(initialTemplate.layers[0]?.id ?? null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  const templatesRef = useRef(templates);
+  templatesRef.current = templates;
+  const wasOpenRef = useRef<boolean>(false);
+  const prevActiveTemplateIdRef = useRef<string | null>(null);
 
   draftRef.current = draft;
 
@@ -280,35 +311,57 @@ export const TagLayoutStudioModal: React.FC<TagLayoutStudioModalProps> = ({
 
   useEffect(() => {
     if (isOpen && !canEdit) {
-      onClose();
+      onCloseRef.current();
       return;
     }
-    if (isOpen) {
+
+    const justOpened = isOpen && !wasOpenRef.current;
+    const switchedTemplate =
+      isOpen &&
+      wasOpenRef.current &&
+      prevActiveTemplateIdRef.current !== null &&
+      prevActiveTemplateIdRef.current !== activeTemplateId;
+
+    wasOpenRef.current = isOpen;
+    if (!isOpen) {
+      prevActiveTemplateIdRef.current = null;
+      return;
+    }
+    prevActiveTemplateIdRef.current = activeTemplateId;
+
+    if (justOpened || switchedTemplate) {
+      const list = templatesRef.current;
       const target =
-        templates.find((t) => t.id === activeTemplateId) ||
-        templates[0] ||
+        list.find((t) => t.id === activeTemplateId) ||
+        list[0] ||
         getBuiltInTemplates()[0];
       const cloned = cloneTemplate(target);
       setDraft(cloned);
       setHistoryPast([]);
       setHistoryFuture([]);
-      setSelectedLayerId(cloned.layers[cloned.layers.length - 1]?.id ?? null);
+      const defaultId = cloned.layers[cloned.layers.length - 1]?.id ?? null;
+      setSelectedLayerIds(defaultId ? [defaultId] : []);
+      lastClickedLayerIdRef.current = defaultId;
       setSavedFeedback('');
       requestAnimationFrame(() => {
         setZoom(computeFitZoom(cloned));
       });
     }
-  }, [isOpen, canEdit, onClose, activeTemplateId, templates]);
+  }, [isOpen, canEdit, activeTemplateId]);
 
   const pxPerMm = BASE_PX_PER_MM * zoom;
   const gridMetrics = useMemo(() => computeSheetGrid(draft), [draft]);
+  const selectedLayers = useMemo(
+    () => draft.layers.filter((l) => selectedLayerIds.includes(l.id)),
+    [draft.layers, selectedLayerIds]
+  );
   const selectedLayer = useMemo(
-    () => draft.layers.find((l) => l.id === selectedLayerId) || null,
-    [draft.layers, selectedLayerId]
+    () => (selectedLayers.length === 1 ? selectedLayers[0] : null),
+    [selectedLayers]
   );
   const selectedLayerIndex = useMemo(
-    () => draft.layers.findIndex((l) => l.id === selectedLayerId),
-    [draft.layers, selectedLayerId]
+    () => (selectedLayer ? draft.layers.findIndex((l) => l.id === selectedLayer.id) : -1),
+    [draft.layers, selectedLayer]
   );
 
   const pushPastSnapshot = (snapshot: TagLayoutTemplate) => {
@@ -343,16 +396,16 @@ export const TagLayoutStudioModal: React.FC<TagLayoutStudioModalProps> = ({
   };
 
   const updateSelectedLayer = (patch: Partial<TagLayer>) => {
-    if (!selectedLayerId) return;
+    if (!selectedLayer) return;
     updateDraft((prev) => ({
       ...prev,
       layers: prev.layers.map((l) =>
-        l.id === selectedLayerId ? ({ ...l, ...patch } as TagLayer) : l
+        l.id === selectedLayer.id ? ({ ...l, ...patch } as TagLayer) : l
       ),
     }));
   };
 
-  // Pointer Drag / Resize / Rotate Handlers
+  // Pointer Drag / Resize / Rotate / Marquee Handlers
   useEffect(() => {
     if (!isOpen) return;
 
@@ -363,13 +416,13 @@ export const TagLayoutStudioModal: React.FC<TagLayoutStudioModalProps> = ({
       if (mode.kind === 'move') {
         const dxMm = (e.clientX - mode.startClientX) / pxPerMm;
         const dyMm = (e.clientY - mode.startClientY) / pxPerMm;
+        const movingIds = new Set(mode.items.map((item) => item.id));
+        const boundsW = mode.origBounds.maxX - mode.origBounds.minX;
+        const boundsH = mode.origBounds.maxY - mode.origBounds.minY;
 
         setDraft((prev) => {
-          const target = prev.layers.find((l) => l.id === mode.layerId);
-          if (!target) return prev;
-
-          let nextX = mode.origXMm + dxMm;
-          let nextY = mode.origYMm + dyMm;
+          let nextBoundsX = mode.origBounds.minX + dxMm;
+          let nextBoundsY = mode.origBounds.minY + dyMm;
           let guideX: number | null = null;
           let guideY: number | null = null;
 
@@ -382,48 +435,56 @@ export const TagLayoutStudioModal: React.FC<TagLayoutStudioModalProps> = ({
             const yCandidates = [0, artH / 2, artH];
 
             for (const other of prev.layers) {
-              if (other.id === target.id || !other.visible) continue;
+              if (movingIds.has(other.id) || !other.visible) continue;
               xCandidates.push(other.xMm, other.xMm + other.widthMm / 2, other.xMm + other.widthMm);
               yCandidates.push(other.yMm, other.yMm + other.heightMm / 2, other.yMm + other.heightMm);
             }
 
-            // Snap left / center / right edge of moving layer
-            const layerXOffsets = [0, target.widthMm / 2, target.widthMm];
+            // Snap left / center / right edge of moving layer (or group bounding box)
+            const layerXOffsets = [0, boundsW / 2, boundsW];
             let bestDx = threshold;
             for (const off of layerXOffsets) {
               for (const cand of xCandidates) {
-                const diff = cand - (nextX + off);
+                const diff = cand - (nextBoundsX + off);
                 if (Math.abs(diff) < Math.abs(bestDx)) {
                   bestDx = diff;
                   guideX = cand;
                 }
               }
             }
-            if (guideX !== null) nextX += bestDx;
+            if (guideX !== null) nextBoundsX += bestDx;
 
-            const layerYOffsets = [0, target.heightMm / 2, target.heightMm];
+            const layerYOffsets = [0, boundsH / 2, boundsH];
             let bestDy = threshold;
             for (const off of layerYOffsets) {
               for (const cand of yCandidates) {
-                const diff = cand - (nextY + off);
+                const diff = cand - (nextBoundsY + off);
                 if (Math.abs(diff) < Math.abs(bestDy)) {
                   bestDy = diff;
                   guideY = cand;
                 }
               }
             }
-            if (guideY !== null) nextY += bestDy;
+            if (guideY !== null) nextBoundsY += bestDy;
           }
 
           setSnapGuides({ xMm: guideX, yMm: guideY });
 
+          const snappedDx = nextBoundsX - mode.origBounds.minX;
+          const snappedDy = nextBoundsY - mode.origBounds.minY;
+          const itemMap = new Map(mode.items.map((it) => [it.id, it]));
+
           return {
             ...prev,
-            layers: prev.layers.map((l) =>
-              l.id === mode.layerId
-                ? ({ ...l, xMm: roundMm(nextX), yMm: roundMm(nextY) } as TagLayer)
-                : l
-            ),
+            layers: prev.layers.map((l) => {
+              const item = itemMap.get(l.id);
+              if (!item) return l;
+              return {
+                ...l,
+                xMm: roundMm(item.origXMm + snappedDx),
+                yMm: roundMm(item.origYMm + snappedDy),
+              } as TagLayer;
+            }),
           };
         });
       } else if (mode.kind === 'resize') {
@@ -495,13 +556,57 @@ export const TagLayoutStudioModal: React.FC<TagLayoutStudioModalProps> = ({
             l.id === mode.layerId ? ({ ...l, rotation: deg % 360 } as TagLayer) : l
           ),
         }));
+      } else if (mode.kind === 'marquee') {
+        mode.currentClientX = e.clientX;
+        mode.currentClientY = e.clientY;
+        const left = Math.min(mode.startClientX, e.clientX);
+        const top = Math.min(mode.startClientY, e.clientY);
+        const width = Math.abs(e.clientX - mode.startClientX);
+        const height = Math.abs(e.clientY - mode.startClientY);
+        if (width >= 3 || height >= 3) {
+          setMarqueeRect({ left, top, width, height });
+          const artboardBox = artboardRef.current?.getBoundingClientRect();
+          if (artboardBox) {
+            const right = left + width;
+            const bottom = top + height;
+            const hitIds = draftRef.current.layers
+              .filter((layer) => {
+                if (!layer.visible || layer.locked) return false;
+                const lLeft = artboardBox.left + layer.xMm * pxPerMm;
+                const lTop = artboardBox.top + layer.yMm * pxPerMm;
+                const lRight = lLeft + layer.widthMm * pxPerMm;
+                const lBottom = lTop + layer.heightMm * pxPerMm;
+                return !(lRight < left || lLeft > right || lBottom < top || lTop > bottom);
+              })
+              .map((l) => l.id);
+            if (mode.additive) {
+              const merged = Array.from(new Set([...mode.baseSelection, ...hitIds]));
+              setSelectedLayerIds(merged);
+            } else {
+              setSelectedLayerIds(hitIds);
+            }
+          }
+        }
       }
     };
 
     const handlePointerUp = () => {
-      if (dragRef.current) {
+      const mode = dragRef.current;
+      if (mode) {
         dragRef.current = null;
         setSnapGuides({ xMm: null, yMm: null });
+        setMarqueeRect(null);
+        if (mode.kind === 'marquee') {
+          const movedPx = Math.hypot(
+            mode.currentClientX - mode.startClientX,
+            mode.currentClientY - mode.startClientY
+          );
+          if (movedPx < 3 && !mode.additive) {
+            setSelectedLayerIds([]);
+          }
+          dragSnapshotRef.current = null;
+          return;
+        }
         if (
           dragSnapshotRef.current &&
           JSON.stringify(dragSnapshotRef.current) !== JSON.stringify(draftRef.current)
@@ -530,7 +635,20 @@ export const TagLayoutStudioModal: React.FC<TagLayoutStudioModalProps> = ({
       const mod = e.metaKey || e.ctrlKey;
       const keyLower = e.key.toLowerCase();
 
+      if (e.key === 'Escape' && !showSaveAsDialog && !showRenameDialog && selectedLayerIds.length > 0) {
+        e.preventDefault();
+        setSelectedLayerIds([]);
+        return;
+      }
+
       if (mod) {
+        // Select All Layers: Ctrl/Cmd + A
+        if (keyLower === 'a') {
+          e.preventDefault();
+          setSelectedLayerIds(draft.layers.map((l) => l.id));
+          setInspectorTab('layer');
+          return;
+        }
         // Undo: Ctrl/Cmd + Z | Redo: Ctrl/Cmd + Shift + Z (atau Ctrl + Y)
         if (keyLower === 'z') {
           e.preventDefault();
@@ -574,59 +692,73 @@ export const TagLayoutStudioModal: React.FC<TagLayoutStudioModalProps> = ({
           setShowGrid((v) => !v);
           return;
         }
-        // Duplicate Selected Layer: Ctrl/Cmd + D
-        if (keyLower === 'd' && selectedLayer) {
+        // Duplicate Selected Layer(s): Ctrl/Cmd + D
+        if (keyLower === 'd' && selectedLayers.length > 0) {
           e.preventDefault();
-          handleDuplicateLayer(selectedLayer);
+          handleDuplicateLayers(selectedLayers);
           return;
         }
         // Arrange Forward/Backward: Ctrl/Cmd + ] / [ (with Shift = Front / Back)
-        if ((e.key === ']' || e.code === 'BracketRight') && selectedLayerIndex !== -1) {
+        if ((e.key === ']' || e.code === 'BracketRight') && selectedLayerIds.length > 0) {
           e.preventDefault();
           if (e.shiftKey) {
-            handleMoveLayerToEdge(selectedLayerIndex, 'front');
+            handleMoveSelectedToEdge('front');
           } else {
-            handleMoveLayerOrder(selectedLayerIndex, 1);
+            handleMoveSelectedOrder(1);
           }
           return;
         }
-        if ((e.key === '[' || e.code === 'BracketLeft') && selectedLayerIndex !== -1) {
+        if ((e.key === '[' || e.code === 'BracketLeft') && selectedLayerIds.length > 0) {
           e.preventDefault();
           if (e.shiftKey) {
-            handleMoveLayerToEdge(selectedLayerIndex, 'back');
+            handleMoveSelectedToEdge('back');
           } else {
-            handleMoveLayerOrder(selectedLayerIndex, -1);
+            handleMoveSelectedOrder(-1);
           }
           return;
         }
       }
 
-      if (!selectedLayer || selectedLayer.locked) return;
+      const unlockedSelected = selectedLayers.filter((l) => !l.locked);
+      if (unlockedSelected.length === 0) return;
 
       const step = e.shiftKey ? 2.0 : 0.5;
       if (e.key === 'ArrowLeft') {
         e.preventDefault();
-        updateSelectedLayer({ xMm: roundMm(selectedLayer.xMm - step) });
+        nudgeSelectedLayers(-step, 0);
       } else if (e.key === 'ArrowRight') {
         e.preventDefault();
-        updateSelectedLayer({ xMm: roundMm(selectedLayer.xMm + step) });
+        nudgeSelectedLayers(step, 0);
       } else if (e.key === 'ArrowUp') {
         e.preventDefault();
-        updateSelectedLayer({ yMm: roundMm(selectedLayer.yMm - step) });
+        nudgeSelectedLayers(0, -step);
       } else if (e.key === 'ArrowDown') {
         e.preventDefault();
-        updateSelectedLayer({ yMm: roundMm(selectedLayer.yMm + step) });
+        nudgeSelectedLayers(0, step);
       } else if ((e.key === 'Delete' || e.key === 'Backspace') && draft.layers.length > 1) {
         e.preventDefault();
-        handleDeleteLayer(selectedLayer.id);
+        handleDeleteLayers(unlockedSelected.map((l) => l.id));
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, selectedLayer, selectedLayerIndex, draft.layers.length, historyPast, historyFuture]);
+  }, [isOpen, selectedLayers, selectedLayerIds, draft.layers, historyPast, historyFuture, showSaveAsDialog, showRenameDialog]);
 
   if (!isOpen || !canEdit) return null;
+
+  const nudgeSelectedLayers = (dxMm: number, dyMm: number) => {
+    const idSet = new Set(selectedLayers.filter((l) => !l.locked).map((l) => l.id));
+    if (idSet.size === 0) return;
+    updateDraft((prev) => ({
+      ...prev,
+      layers: prev.layers.map((l) =>
+        idSet.has(l.id)
+          ? ({ ...l, xMm: roundMm(l.xMm + dxMm), yMm: roundMm(l.yMm + dyMm) } as TagLayer)
+          : l
+      ),
+    }));
+  };
 
   const handleAddLayer = (type: TagLayerType) => {
     const newLayer = createNewLayer(type, draft.sticker.widthMm, draft.sticker.heightMm);
@@ -634,30 +766,57 @@ export const TagLayoutStudioModal: React.FC<TagLayoutStudioModalProps> = ({
       ...prev,
       layers: [...prev.layers, newLayer],
     }));
-    setSelectedLayerId(newLayer.id);
+    setSelectedLayerIds([newLayer.id]);
+    lastClickedLayerIdRef.current = newLayer.id;
     setInspectorTab('layer');
   };
 
-  const handleDeleteLayer = (layerId: string) => {
+  const handleDeleteLayers = (layerIds: string[]) => {
+    const idSet = new Set(layerIds);
+    if (idSet.size === 0) return;
     updateDraft((prev) => {
-      const remaining = prev.layers.filter((l) => l.id !== layerId);
-      if (selectedLayerId === layerId) {
-        setSelectedLayerId(remaining[remaining.length - 1]?.id ?? null);
+      let remaining = prev.layers.filter((l) => !idSet.has(l.id));
+      if (remaining.length === 0) {
+        if (prev.layers.length <= 1) return prev;
+        // Keep the bottom-most layer so at least 1 layer always remains
+        remaining = [prev.layers[0]];
+      }
+      const nextSelected = selectedLayerIds.filter(
+        (id) => !idSet.has(id) && remaining.some((r) => r.id === id)
+      );
+      if (nextSelected.length > 0) {
+        setSelectedLayerIds(nextSelected);
+      } else {
+        const fallbackId = remaining[remaining.length - 1]?.id ?? null;
+        setSelectedLayerIds(fallbackId ? [fallbackId] : []);
+        lastClickedLayerIdRef.current = fallbackId;
       }
       return { ...prev, layers: remaining };
     });
   };
 
-  const handleDuplicateLayer = (layer: TagLayer) => {
-    const copy: TagLayer = {
+  const handleDeleteLayer = (layerId: string) => {
+    handleDeleteLayers([layerId]);
+  };
+
+  const handleDuplicateLayers = (layersToCopy: TagLayer[]) => {
+    if (layersToCopy.length === 0) return;
+    const stamp = Date.now().toString(36);
+    const copies: TagLayer[] = layersToCopy.map((layer, idx) => ({
       ...cloneTemplate({ ...draft, layers: [layer] }).layers[0],
-      id: `layer-${layer.type}-${Date.now().toString(36)}`,
+      id: `layer-${layer.type}-${stamp}-${idx}`,
       label: `${layer.label} (Copy)`,
       xMm: roundMm(layer.xMm + 1.5),
       yMm: roundMm(layer.yMm + 1.5),
-    };
-    updateDraft((prev) => ({ ...prev, layers: [...prev.layers, copy] }));
-    setSelectedLayerId(copy.id);
+    }));
+    updateDraft((prev) => ({ ...prev, layers: [...prev.layers, ...copies] }));
+    const newIds = copies.map((c) => c.id);
+    setSelectedLayerIds(newIds);
+    lastClickedLayerIdRef.current = newIds[newIds.length - 1] ?? null;
+  };
+
+  const handleDuplicateLayer = (layer: TagLayer) => {
+    handleDuplicateLayers([layer]);
   };
 
   const handleMoveLayerOrder = (indexInLayers: number, delta: -1 | 1) => {
@@ -687,37 +846,162 @@ export const TagLayoutStudioModal: React.FC<TagLayoutStudioModalProps> = ({
     });
   };
 
+  const handleMoveSelectedOrder = (delta: -1 | 1) => {
+    if (selectedLayerIds.length === 0) return;
+    const idSet = new Set(selectedLayerIds);
+    updateDraft((prev) => {
+      const arr = [...prev.layers];
+      if (delta > 0) {
+        for (let i = arr.length - 2; i >= 0; i--) {
+          if (idSet.has(arr[i].id) && !idSet.has(arr[i + 1].id)) {
+            [arr[i], arr[i + 1]] = [arr[i + 1], arr[i]];
+          }
+        }
+      } else {
+        for (let i = 1; i < arr.length; i++) {
+          if (idSet.has(arr[i].id) && !idSet.has(arr[i - 1].id)) {
+            [arr[i], arr[i - 1]] = [arr[i - 1], arr[i]];
+          }
+        }
+      }
+      return { ...prev, layers: arr };
+    });
+  };
+
+  const handleMoveSelectedToEdge = (edge: 'front' | 'back') => {
+    if (selectedLayerIds.length === 0) return;
+    const idSet = new Set(selectedLayerIds);
+    updateDraft((prev) => {
+      const selected = prev.layers.filter((l) => idSet.has(l.id));
+      const others = prev.layers.filter((l) => !idSet.has(l.id));
+      return {
+        ...prev,
+        layers: edge === 'front' ? [...others, ...selected] : [...selected, ...others],
+      };
+    });
+  };
+
   const handleAlignSelected = (align: 'left' | 'centerH' | 'right' | 'top' | 'centerV' | 'bottom') => {
-    if (!selectedLayer) return;
-    const sw = draft.sticker.widthMm;
-    const sh = draft.sticker.heightMm;
-    switch (align) {
-      case 'left':
-        updateSelectedLayer({ xMm: 0 });
-        break;
-      case 'centerH':
-        updateSelectedLayer({ xMm: roundMm((sw - selectedLayer.widthMm) / 2) });
-        break;
-      case 'right':
-        updateSelectedLayer({ xMm: roundMm(sw - selectedLayer.widthMm) });
-        break;
-      case 'top':
-        updateSelectedLayer({ yMm: 0 });
-        break;
-      case 'centerV':
-        updateSelectedLayer({ yMm: roundMm((sh - selectedLayer.heightMm) / 2) });
-        break;
-      case 'bottom':
-        updateSelectedLayer({ yMm: roundMm(sh - selectedLayer.heightMm) });
-        break;
+    const unlocked = selectedLayers.filter((l) => !l.locked);
+    if (unlocked.length === 0) return;
+
+    if (unlocked.length === 1) {
+      const target = unlocked[0];
+      const sw = draft.sticker.widthMm;
+      const sh = draft.sticker.heightMm;
+      let nextX = target.xMm;
+      let nextY = target.yMm;
+      switch (align) {
+        case 'left':
+          nextX = 0;
+          break;
+        case 'centerH':
+          nextX = roundMm((sw - target.widthMm) / 2);
+          break;
+        case 'right':
+          nextX = roundMm(sw - target.widthMm);
+          break;
+        case 'top':
+          nextY = 0;
+          break;
+        case 'centerV':
+          nextY = roundMm((sh - target.heightMm) / 2);
+          break;
+        case 'bottom':
+          nextY = roundMm(sh - target.heightMm);
+          break;
+      }
+      updateDraft((prev) => ({
+        ...prev,
+        layers: prev.layers.map((l) =>
+          l.id === target.id ? ({ ...l, xMm: nextX, yMm: nextY } as TagLayer) : l
+        ),
+      }));
+      return;
     }
+
+    // Multi-selection: align unlocked selected layers relative to the selection's bounding box
+    const minX = Math.min(...unlocked.map((l) => l.xMm));
+    const maxX = Math.max(...unlocked.map((l) => l.xMm + l.widthMm));
+    const minY = Math.min(...unlocked.map((l) => l.yMm));
+    const maxY = Math.max(...unlocked.map((l) => l.yMm + l.heightMm));
+    const midX = (minX + maxX) / 2;
+    const midY = (minY + maxY) / 2;
+    const idSet = new Set(unlocked.map((l) => l.id));
+
+    updateDraft((prev) => ({
+      ...prev,
+      layers: prev.layers.map((l) => {
+        if (!idSet.has(l.id)) return l;
+        switch (align) {
+          case 'left':
+            return { ...l, xMm: roundMm(minX) } as TagLayer;
+          case 'centerH':
+            return { ...l, xMm: roundMm(midX - l.widthMm / 2) } as TagLayer;
+          case 'right':
+            return { ...l, xMm: roundMm(maxX - l.widthMm) } as TagLayer;
+          case 'top':
+            return { ...l, yMm: roundMm(minY) } as TagLayer;
+          case 'centerV':
+            return { ...l, yMm: roundMm(midY - l.heightMm / 2) } as TagLayer;
+          case 'bottom':
+            return { ...l, yMm: roundMm(maxY - l.heightMm) } as TagLayer;
+        }
+      }),
+    }));
+  };
+
+  const handleCenterGroupOnArtboard = (axis: 'x' | 'y') => {
+    const unlocked = selectedLayers.filter((l) => !l.locked);
+    if (unlocked.length === 0) return;
+    const minX = Math.min(...unlocked.map((l) => l.xMm));
+    const maxX = Math.max(...unlocked.map((l) => l.xMm + l.widthMm));
+    const minY = Math.min(...unlocked.map((l) => l.yMm));
+    const maxY = Math.max(...unlocked.map((l) => l.yMm + l.heightMm));
+    const dx = axis === 'x' ? (draft.sticker.widthMm - (maxX - minX)) / 2 - minX : 0;
+    const dy = axis === 'y' ? (draft.sticker.heightMm - (maxY - minY)) / 2 - minY : 0;
+    const idSet = new Set(unlocked.map((l) => l.id));
+    updateDraft((prev) => ({
+      ...prev,
+      layers: prev.layers.map((l) =>
+        idSet.has(l.id)
+          ? ({ ...l, xMm: roundMm(l.xMm + dx), yMm: roundMm(l.yMm + dy) } as TagLayer)
+          : l
+      ),
+    }));
+  };
+
+  const handleToggleLockSelected = () => {
+    if (selectedLayers.length === 0) return;
+    const allLocked = selectedLayers.every((l) => l.locked);
+    const idSet = new Set(selectedLayers.map((l) => l.id));
+    updateDraft((prev) => ({
+      ...prev,
+      layers: prev.layers.map((l) =>
+        idSet.has(l.id) ? ({ ...l, locked: !allLocked } as TagLayer) : l
+      ),
+    }));
+  };
+
+  const handleToggleVisibleSelected = () => {
+    if (selectedLayers.length === 0) return;
+    const anyHidden = selectedLayers.some((l) => !l.visible);
+    const idSet = new Set(selectedLayers.map((l) => l.id));
+    updateDraft((prev) => ({
+      ...prev,
+      layers: prev.layers.map((l) =>
+        idSet.has(l.id) ? ({ ...l, visible: anyHidden } as TagLayer) : l
+      ),
+    }));
   };
 
   const handleResetBuiltIn = () => {
     const builtIn = getBuiltInTemplates().find((b) => b.id === draft.id) || getBuiltInTemplates()[0];
     const cloned = cloneTemplate(builtIn);
     setDraft(cloned);
-    setSelectedLayerId(cloned.layers[cloned.layers.length - 1]?.id ?? null);
+    const defaultId = cloned.layers[cloned.layers.length - 1]?.id ?? null;
+    setSelectedLayerIds(defaultId ? [defaultId] : []);
+    lastClickedLayerIdRef.current = defaultId;
     setSavedFeedback('Direset ke bawaan pabrik');
     setTimeout(() => setSavedFeedback(''), 2500);
   };
@@ -745,6 +1029,7 @@ export const TagLayoutStudioModal: React.FC<TagLayoutStudioModalProps> = ({
       updatedAt: nowIso,
     };
     const saved = onSaveTemplate(copy, true);
+    prevActiveTemplateIdRef.current = saved.id;
     setDraft(cloneTemplate(saved));
     setShowSaveAsDialog(false);
     setSaveAsName('');
@@ -868,8 +1153,8 @@ export const TagLayoutStudioModal: React.FC<TagLayoutStudioModalProps> = ({
                 onChange={(val) => onSelectTemplate(val)}
                 placeholder="Pilih Preset Template"
                 searchable={templates.length > 5}
-                minDropdownWidth={270}
-                className="w-[175px] sm:w-[205px]"
+                minDropdownWidth={380}
+                className="w-[225px] sm:w-[300px]"
                 buttonClassName="w-full h-8 px-2.5 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs font-semibold text-slate-700 dark:text-zinc-200 hover:border-[#c28e62] cursor-pointer flex items-center justify-between gap-1.5"
                 options={templates.map((t) => ({
                   value: t.id,
@@ -1146,21 +1431,66 @@ export const TagLayoutStudioModal: React.FC<TagLayoutStudioModalProps> = ({
 
             {/* LAYERS LIST (top-most layer shown first, like Illustrator) */}
             <div className="flex-1 overflow-y-auto p-2.5 space-y-1">
-              <div className="flex items-center justify-between px-1 pb-1">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500 flex items-center gap-1">
-                  <Layers size={11} /> Layers ({draft.layers.length})
-                </span>
-                <span className="text-[10px] text-slate-400 dark:text-zinc-500">Atas = Depan</span>
+              <div className="flex items-center justify-between px-1 pb-1 gap-1.5">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <CustomCheckbox
+                    checked={draft.layers.length > 0 && selectedLayerIds.length === draft.layers.length}
+                    indeterminate={selectedLayerIds.length > 0 && selectedLayerIds.length < draft.layers.length}
+                    onChange={(checked) => {
+                      if (checked) {
+                        setSelectedLayerIds(draft.layers.map((l) => l.id));
+                        setInspectorTab('layer');
+                      } else {
+                        setSelectedLayerIds([]);
+                      }
+                    }}
+                    ariaLabel="Pilih semua layer"
+                    className="scale-90 origin-left"
+                  />
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500 flex items-center gap-1 truncate">
+                    <Layers size={11} />
+                    {selectedLayerIds.length > 1
+                      ? `${selectedLayerIds.length}/${draft.layers.length} Dipilih`
+                      : `Layers (${draft.layers.length})`}
+                  </span>
+                </div>
+                <span className="text-[10px] text-slate-400 dark:text-zinc-500 shrink-0">Atas = Depan</span>
               </div>
 
-              {[...draft.layers].reverse().map((layer, revIdx) => {
+              {[...draft.layers].reverse().map((layer, revIdx, reversedArr) => {
                 const realIdx = draft.layers.length - 1 - revIdx;
-                const isSelected = layer.id === selectedLayerId;
+                const isSelected = selectedLayerIds.includes(layer.id);
                 return (
                   <div
                     key={layer.id}
-                    onClick={() => {
-                      setSelectedLayerId(layer.id);
+                    onClick={(e) => {
+                      if (e.shiftKey && lastClickedLayerIdRef.current) {
+                        const anchorIdx = reversedArr.findIndex((l) => l.id === lastClickedLayerIdRef.current);
+                        if (anchorIdx !== -1) {
+                          const start = Math.min(anchorIdx, revIdx);
+                          const end = Math.max(anchorIdx, revIdx);
+                          const rangeIds = reversedArr.slice(start, end + 1).map((l) => l.id);
+                          setSelectedLayerIds((prev) =>
+                            e.metaKey || e.ctrlKey
+                              ? Array.from(new Set([...prev, ...rangeIds]))
+                              : rangeIds
+                          );
+                          setInspectorTab('layer');
+                          return;
+                        }
+                      }
+                      if (e.metaKey || e.ctrlKey) {
+                        setSelectedLayerIds((prev) =>
+                          prev.includes(layer.id)
+                            ? prev.filter((id) => id !== layer.id)
+                            : [...prev, layer.id]
+                        );
+                        lastClickedLayerIdRef.current = layer.id;
+                        setInspectorTab('layer');
+                        return;
+                      }
+                      setSelectedLayerIds([layer.id]);
+                      lastClickedLayerIdRef.current = layer.id;
                       setInspectorTab('layer');
                     }}
                     className={`group flex items-center gap-1.5 px-2 py-1.5 rounded-lg border text-xs cursor-pointer transition-colors ${
@@ -1169,6 +1499,29 @@ export const TagLayoutStudioModal: React.FC<TagLayoutStudioModalProps> = ({
                         : 'border-transparent hover:bg-slate-50 dark:hover:bg-zinc-800/50 text-slate-600 dark:text-zinc-300'
                     }`}
                   >
+                    <div
+                      onClick={(e) => e.stopPropagation()}
+                      className={`shrink-0 transition-opacity ${
+                        isSelected || selectedLayerIds.length > 1
+                          ? 'opacity-100'
+                          : 'opacity-0 group-hover:opacity-100 focus-within:opacity-100'
+                      }`}
+                    >
+                      <CustomCheckbox
+                        checked={isSelected}
+                        onChange={(checked) => {
+                          setSelectedLayerIds((prev) =>
+                            checked
+                              ? Array.from(new Set([...prev, layer.id]))
+                              : prev.filter((id) => id !== layer.id)
+                          );
+                          lastClickedLayerIdRef.current = layer.id;
+                          setInspectorTab('layer');
+                        }}
+                        ariaLabel={`Pilih layer ${layer.label}`}
+                        className="scale-75 origin-left"
+                      />
+                    </div>
                     {renderLayerIcon(layer.type)}
                     <span className="flex-1 truncate text-[11px]">{layer.label}</span>
 
@@ -1244,15 +1597,36 @@ export const TagLayoutStudioModal: React.FC<TagLayoutStudioModalProps> = ({
           <main
             ref={canvasViewportRef}
             onPointerDown={(e) => {
-              if (e.target === e.currentTarget) setSelectedLayerId(null);
+              if (e.button !== 0 || e.target !== e.currentTarget) return;
+              dragRef.current = {
+                kind: 'marquee',
+                startClientX: e.clientX,
+                startClientY: e.clientY,
+                currentClientX: e.clientX,
+                currentClientY: e.clientY,
+                additive: e.shiftKey || e.metaKey || e.ctrlKey,
+                baseSelection: selectedLayerIds,
+              };
             }}
-            className="flex-1 min-w-0 min-h-0 bg-slate-100 dark:bg-zinc-950 relative overflow-auto flex items-center justify-center p-8 sm:p-12"
+            className="flex-1 min-w-0 min-h-0 bg-slate-100 dark:bg-zinc-950 relative overflow-auto flex items-center justify-center p-8 sm:p-12 select-none"
             style={{
               backgroundImage:
                 'radial-gradient(circle, rgba(148,163,184,0.28) 1px, transparent 1px)',
               backgroundSize: '18px 18px',
             }}
           >
+            {marqueeRect && (
+              <div
+                aria-hidden="true"
+                className="fixed z-[10030] border border-[#0284c7] bg-[#0284c7]/10 pointer-events-none rounded-[2px]"
+                style={{
+                  left: `${marqueeRect.left}px`,
+                  top: `${marqueeRect.top}px`,
+                  width: `${marqueeRect.width}px`,
+                  height: `${marqueeRect.height}px`,
+                }}
+              />
+            )}
             <div className="relative inline-block" ref={artboardRef}>
               {/* Top Ruler (mm) */}
               <div
@@ -1299,25 +1673,68 @@ export const TagLayoutStudioModal: React.FC<TagLayoutStudioModalProps> = ({
                 sampleBatch={sampleBatch ?? undefined}
                 sampleTag={sampleTag ?? undefined}
                 interactive
-                selectedLayerId={selectedLayerId}
+                selectedLayerIds={selectedLayerIds}
                 showGrid={showGrid}
                 snapGuides={snapGuides}
-                onArtboardClick={() => setSelectedLayerId(null)}
+                onArtboardPointerDown={(e) => {
+                  if (e.button !== 0) return;
+                  dragRef.current = {
+                    kind: 'marquee',
+                    startClientX: e.clientX,
+                    startClientY: e.clientY,
+                    currentClientX: e.clientX,
+                    currentClientY: e.clientY,
+                    additive: e.shiftKey || e.metaKey || e.ctrlKey,
+                    baseSelection: selectedLayerIds,
+                  };
+                }}
                 onLayerPointerDown={(e, layer) => {
-                  setSelectedLayerId(layer.id);
+                  const isModifier = e.shiftKey || e.metaKey || e.ctrlKey;
+                  let nextIds: string[];
+                  if (isModifier) {
+                    if (selectedLayerIds.includes(layer.id)) {
+                      nextIds = selectedLayerIds.filter((id) => id !== layer.id);
+                      setSelectedLayerIds(nextIds);
+                      return;
+                    }
+                    nextIds = [...selectedLayerIds, layer.id];
+                    setSelectedLayerIds(nextIds);
+                  } else if (selectedLayerIds.includes(layer.id)) {
+                    nextIds = selectedLayerIds;
+                  } else {
+                    nextIds = [layer.id];
+                    setSelectedLayerIds(nextIds);
+                  }
+                  lastClickedLayerIdRef.current = layer.id;
                   setInspectorTab('layer');
+
+                  const movingLayers = draftRef.current.layers.filter(
+                    (l) => nextIds.includes(l.id) && !l.locked
+                  );
+                  if (movingLayers.length === 0) return;
+
                   dragSnapshotRef.current = cloneTemplate(draftRef.current);
                   dragRef.current = {
                     kind: 'move',
-                    layerId: layer.id,
+                    primaryLayerId: layer.id,
                     startClientX: e.clientX,
                     startClientY: e.clientY,
-                    origXMm: layer.xMm,
-                    origYMm: layer.yMm,
+                    items: movingLayers.map((ml) => ({
+                      id: ml.id,
+                      origXMm: ml.xMm,
+                      origYMm: ml.yMm,
+                    })),
+                    origBounds: {
+                      minX: Math.min(...movingLayers.map((ml) => ml.xMm)),
+                      minY: Math.min(...movingLayers.map((ml) => ml.yMm)),
+                      maxX: Math.max(...movingLayers.map((ml) => ml.xMm + ml.widthMm)),
+                      maxY: Math.max(...movingLayers.map((ml) => ml.yMm + ml.heightMm)),
+                    },
                   };
                 }}
                 onResizePointerDown={(e, layer, handle) => {
-                  setSelectedLayerId(layer.id);
+                  setSelectedLayerIds([layer.id]);
+                  lastClickedLayerIdRef.current = layer.id;
                   dragSnapshotRef.current = cloneTemplate(draftRef.current);
                   dragRef.current = {
                     kind: 'resize',
@@ -1703,8 +2120,8 @@ export const TagLayoutStudioModal: React.FC<TagLayoutStudioModalProps> = ({
                         <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500">
                           Tipografi
                         </div>
-                        <div className="grid grid-cols-2 gap-2">
-                          <div className="block">
+                        <div className="grid grid-cols-[minmax(0,1fr)_74px] gap-2">
+                          <div className="block min-w-0">
                             <span className="text-[10px] text-slate-500 dark:text-zinc-400">Font</span>
                             <div className="mt-0.5">
                               <CustomSelect
@@ -1714,7 +2131,7 @@ export const TagLayoutStudioModal: React.FC<TagLayoutStudioModalProps> = ({
                                 }
                                 placeholder="Pilih Font"
                                 searchable={false}
-                                minDropdownWidth={180}
+                                minDropdownWidth={260}
                                 buttonClassName="w-full h-8 px-2.5 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs text-slate-700 dark:text-zinc-200 hover:border-[#c28e62] cursor-pointer flex items-center justify-between gap-1"
                                 options={[
                                   { value: 'KodeMono', label: 'Kode Mono', badge: 'Mono' },
@@ -1725,15 +2142,15 @@ export const TagLayoutStudioModal: React.FC<TagLayoutStudioModalProps> = ({
                             </div>
                           </div>
                           <label className="block">
-                            <span className="text-[10px] text-slate-500 dark:text-zinc-400">Ukuran (pt)</span>
+                            <span className="text-[10px] text-slate-500 dark:text-zinc-400 whitespace-nowrap">Ukuran (pt)</span>
                             <MmNumberInput
                               step={0.5}
                               min={2}
-                              max={72}
+                              max={2000}
                               fallback={6}
                               value={selectedLayer.fontSizePt}
                               onCommit={(val) => updateSelectedLayer({ fontSizePt: val })}
-                              className="mt-0.5 w-full h-8 px-2.5 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs font-mono outline-none focus:border-[#c28e62]"
+                              className="mt-0.5 w-full h-8 px-2 text-center rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs font-mono outline-none focus:border-[#c28e62]"
                             />
                           </label>
                         </div>
@@ -1954,10 +2371,211 @@ export const TagLayoutStudioModal: React.FC<TagLayoutStudioModalProps> = ({
                       </div>
                     )}
                   </>
+                ) : selectedLayers.length > 1 ? (
+                  <div className="space-y-4">
+                    {/* Multi-Selection Header + Bulk Actions */}
+                    <div className="p-2.5 rounded-xl border border-[#c28e62]/40 bg-[#fcf7f3] dark:bg-zinc-800/80 space-y-2.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-bold text-slate-800 dark:text-zinc-100">
+                          {selectedLayers.length} Layer Terpilih
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedLayerIds([])}
+                          className="text-[11px] font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-zinc-200 cursor-pointer"
+                        >
+                          Batal Pilih
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-4 gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleDuplicateLayers(selectedLayers)}
+                          title="Duplikat Semua Terpilih (Ctrl+D)"
+                          className="h-8 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 flex items-center justify-center gap-1 text-[10px] font-semibold text-slate-600 dark:text-zinc-300 hover:border-[#c28e62] hover:text-[#c28e62] cursor-pointer"
+                        >
+                          <Copy size={12} />
+                          <span>Duplikat</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleToggleLockSelected}
+                          title="Kunci / Buka Kunci Terpilih"
+                          className="h-8 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 flex items-center justify-center gap-1 text-[10px] font-semibold text-slate-600 dark:text-zinc-300 hover:border-[#c28e62] hover:text-[#c28e62] cursor-pointer"
+                        >
+                          {selectedLayers.every((l) => l.locked) ? <Unlock size={12} /> : <Lock size={12} />}
+                          <span>{selectedLayers.every((l) => l.locked) ? 'Buka' : 'Kunci'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleToggleVisibleSelected}
+                          title="Tampilkan / Sembunyikan Terpilih"
+                          className="h-8 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 flex items-center justify-center gap-1 text-[10px] font-semibold text-slate-600 dark:text-zinc-300 hover:border-[#c28e62] hover:text-[#c28e62] cursor-pointer"
+                        >
+                          {selectedLayers.some((l) => !l.visible) ? <Eye size={12} /> : <EyeOff size={12} />}
+                          <span>{selectedLayers.some((l) => !l.visible) ? 'Tampil' : 'Semb.'}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteLayers(selectedLayers.map((l) => l.id))}
+                          disabled={draft.layers.length - selectedLayers.length < 1}
+                          title={
+                            draft.layers.length - selectedLayers.length < 1
+                              ? 'Minimal 1 layer harus tersisa'
+                              : 'Hapus Layer Terpilih (Del)'
+                          }
+                          className="h-8 rounded-lg border border-rose-200 dark:border-rose-900/50 bg-white dark:bg-zinc-900 flex items-center justify-center gap-1 text-[10px] font-semibold text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 disabled:opacity-35 disabled:cursor-not-allowed cursor-pointer"
+                        >
+                          <Trash2 size={12} />
+                          <span>Hapus</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Align Selection Relative to Bounds */}
+                    <div>
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500 mb-1.5">
+                        Ratakan Antar Elemen
+                      </div>
+                      <div className="grid grid-cols-6 gap-1">
+                        {[
+                          { id: 'left', icon: AlignStartVertical, title: 'Rata Kiri' },
+                          { id: 'centerH', icon: AlignCenterVertical, title: 'Tengah Horizontal' },
+                          { id: 'right', icon: AlignEndVertical, title: 'Rata Kanan' },
+                          { id: 'top', icon: AlignStartHorizontal, title: 'Rata Atas' },
+                          { id: 'centerV', icon: AlignCenterHorizontal, title: 'Tengah Vertikal' },
+                          { id: 'bottom', icon: AlignEndHorizontal, title: 'Rata Bawah' },
+                        ].map((btn) => {
+                          const Icon = btn.icon;
+                          return (
+                            <button
+                              key={btn.id}
+                              type="button"
+                              onClick={() => handleAlignSelected(btn.id as any)}
+                              title={btn.title}
+                              className="h-7 rounded-lg border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800 hover:border-[#c28e62] hover:text-[#c28e62] flex items-center justify-center text-slate-600 dark:text-zinc-300 cursor-pointer"
+                            >
+                              <Icon size={13} />
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Center Group on Artboard */}
+                    <div>
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500 mb-1.5">
+                        Posisikan Grup di Kanvas
+                      </div>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleCenterGroupOnArtboard('x')}
+                          className="h-8 rounded-lg border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800 hover:border-[#c28e62] hover:text-[#c28e62] flex items-center justify-center gap-1.5 text-[11px] font-semibold text-slate-600 dark:text-zinc-300 cursor-pointer"
+                        >
+                          <AlignCenterVertical size={13} />
+                          <span>Tengah H</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleCenterGroupOnArtboard('y')}
+                          className="h-8 rounded-lg border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800 hover:border-[#c28e62] hover:text-[#c28e62] flex items-center justify-center gap-1.5 text-[11px] font-semibold text-slate-600 dark:text-zinc-300 cursor-pointer"
+                        >
+                          <AlignCenterHorizontal size={13} />
+                          <span>Tengah V</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Bulk Layer Ordering */}
+                    <div>
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500 mb-1.5">
+                        Urutan Layer Terpilih
+                      </div>
+                      <div className="grid grid-cols-4 gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleMoveSelectedToEdge('back')}
+                          title="Send to Back (Ctrl+Shift+[)"
+                          className="h-7 rounded-lg border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800 hover:border-[#c28e62] hover:text-[#c28e62] flex items-center justify-center gap-1 text-[10px] font-semibold text-slate-600 dark:text-zinc-300 cursor-pointer"
+                        >
+                          <SendToBack size={12} />
+                          <span>Back</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleMoveSelectedOrder(-1)}
+                          title="Send Backward (Ctrl+[)"
+                          className="h-7 rounded-lg border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800 hover:border-[#c28e62] hover:text-[#c28e62] flex items-center justify-center gap-1 text-[10px] font-semibold text-slate-600 dark:text-zinc-300 cursor-pointer"
+                        >
+                          <ArrowDown size={12} />
+                          <span>Backward</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleMoveSelectedOrder(1)}
+                          title="Bring Forward (Ctrl+])"
+                          className="h-7 rounded-lg border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800 hover:border-[#c28e62] hover:text-[#c28e62] flex items-center justify-center gap-1 text-[10px] font-semibold text-slate-600 dark:text-zinc-300 cursor-pointer"
+                        >
+                          <ArrowUp size={12} />
+                          <span>Forward</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleMoveSelectedToEdge('front')}
+                          title="Bring to Front (Ctrl+Shift+])"
+                          className="h-7 rounded-lg border border-slate-200 dark:border-zinc-700 bg-slate-50 dark:bg-zinc-800 hover:border-[#c28e62] hover:text-[#c28e62] flex items-center justify-center gap-1 text-[10px] font-semibold text-slate-600 dark:text-zinc-300 cursor-pointer"
+                        >
+                          <BringToFront size={12} />
+                          <span>Front</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Selected Layers List */}
+                    <div>
+                      <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-zinc-500 mb-1.5">
+                        Daftar Terpilih
+                      </div>
+                      <div className="space-y-1 max-h-48 overflow-y-auto pr-0.5">
+                        {[...selectedLayers].reverse().map((layer) => (
+                          <div
+                            key={layer.id}
+                            className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg border border-slate-200 dark:border-zinc-700/80 bg-slate-50 dark:bg-zinc-800/70"
+                          >
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedLayerIds([layer.id]);
+                                lastClickedLayerIdRef.current = layer.id;
+                              }}
+                              className="flex items-center gap-1.5 min-w-0 text-left flex-1 text-[11px] font-semibold text-slate-700 dark:text-zinc-200 hover:text-[#c28e62] cursor-pointer"
+                              title="Fokus edit layer ini saja"
+                            >
+                              {renderLayerIcon(layer.type)}
+                              <span className="truncate">{layer.label}</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setSelectedLayerIds((prev) => prev.filter((id) => id !== layer.id))
+                              }
+                              title="Keluarkan dari pilihan"
+                              className="p-0.5 rounded text-slate-400 hover:text-rose-500 cursor-pointer"
+                            >
+                              <X size={11} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
                 ) : (
-                  <div className="py-10 text-center text-slate-400 dark:text-zinc-500 space-y-2">
+                  <div className="py-10 text-center text-slate-400 dark:text-zinc-500 space-y-2 px-2">
                     <Sliders size={22} className="mx-auto opacity-50" />
-                    <p className="text-xs">Klik elemen di canvas atau di daftar Layers untuk mengedit posisinya.</p>
+                    <p className="text-xs leading-relaxed">
+                      Klik elemen di kanvas atau daftar Layers untuk mengedit. Tahan <span className="font-mono font-semibold">Shift/Ctrl+Klik</span>, tekan <span className="font-mono font-semibold">Ctrl+A</span>, atau <span className="font-mono font-semibold">drag</span> di area kosong kanvas untuk memilih banyak layer sekaligus.
+                    </p>
                   </div>
                 )
               ) : (
