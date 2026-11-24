@@ -45,7 +45,7 @@ class CategoryController extends Controller
             'name' => $cleanName,
             'parentId' => $parentId,
             'level' => $level,
-            'createdAt' => gmdate('Y-m-d'),
+            'createdAt' => gmdate('Y-m-d\TH:i:s\Z'),
             'specSchema' => $specSchema,
         ]);
 

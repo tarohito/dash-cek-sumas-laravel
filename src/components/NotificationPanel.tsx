@@ -15,6 +15,7 @@ import {
   ChevronDown,
   ChevronRight,
 } from 'lucide-react';
+import { NewBadge } from './NewBadge';
 
 export type NotificationCategoryFilter = 'all' | 'important' | 'reset' | 'scan' | 'edit';
 
@@ -89,6 +90,7 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
   const [viewportWidth, setViewportWidth] = useState<number>(() =>
     typeof window !== 'undefined' ? window.innerWidth : 1024
   );
+  const [, setLiveTick] = useState<number>(() => Date.now());
 
   useEffect(() => {
     if (!isOpen) return;
@@ -99,9 +101,13 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
     handleResize();
     window.addEventListener('keydown', handleKeyDown);
     window.addEventListener('resize', handleResize);
+    const tickTimer = setInterval(() => {
+      setLiveTick(Date.now());
+    }, 15000);
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
       window.removeEventListener('resize', handleResize);
+      clearInterval(tickTimer);
     };
   }, [isOpen, onClose]);
 
@@ -360,6 +366,7 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
                             >
                               {item.title}
                             </p>
+                            <NewBadge date={item.createdAtTs ?? item.timestamp} size="xs" />
                           </div>
 
                           <div className="flex items-center gap-1 shrink-0 pt-0.5">

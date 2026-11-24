@@ -233,6 +233,9 @@ class TagLayoutController extends Controller
             return ['valid' => false, 'error' => 'Tidak ada elemen valid pada template layout.'];
         }
 
+        $rawCreatedAt = SecurityHardeningService::sanitizeStringInput($payload['createdAt'] ?? '', 40);
+        $validCreatedAt = ($rawCreatedAt !== '' && strtotime($rawCreatedAt) !== false) ? $rawCreatedAt : null;
+
         return [
             'valid' => true,
             'template' => [
@@ -240,6 +243,7 @@ class TagLayoutController extends Controller
                 'name' => $name,
                 'description' => $description,
                 'isBuiltIn' => in_array($id, self::BUILT_IN_IDS, true),
+                'createdAt' => $validCreatedAt,
                 'updatedAt' => gmdate('Y-m-d\TH:i:s\Z'),
                 'sticker' => $sticker,
                 'sheet' => $sheet,
@@ -298,12 +302,17 @@ class TagLayoutController extends Controller
         $found = false;
         foreach ($templates as $idx => $existing) {
             if (($existing['id'] ?? '') === $clean['id']) {
+                $existingCreatedAt = !empty($existing['createdAt']) ? (string) $existing['createdAt'] : null;
+                $clean['createdAt'] = $existingCreatedAt ?: ($clean['createdAt'] ?? gmdate('Y-m-d\TH:i:s\Z'));
                 $templates[$idx] = $clean;
                 $found = true;
                 break;
             }
         }
         if (!$found) {
+            if (empty($clean['isBuiltIn']) && empty($clean['createdAt'])) {
+                $clean['createdAt'] = gmdate('Y-m-d\TH:i:s\Z');
+            }
             $templates[] = $clean;
         }
 

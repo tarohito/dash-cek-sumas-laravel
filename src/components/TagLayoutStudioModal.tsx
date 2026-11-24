@@ -56,6 +56,7 @@ import { type BatchItem, type TagItem } from '../utils/pdfGenerator';
 import { TagStickerPreview } from './TagStickerPreview';
 import { CustomSelect } from './CustomSelect';
 import { CustomCheckbox } from './CustomCheckbox';
+import { NewBadge, isRecentlyCreated } from './NewBadge';
 
 interface TagLayoutStudioModalProps {
   isOpen: boolean;
@@ -243,6 +244,15 @@ export const TagLayoutStudioModal: React.FC<TagLayoutStudioModalProps> = ({
   const [renameValue, setRenameValue] = useState<string>('');
   const [showRenameDialog, setShowRenameDialog] = useState<boolean>(false);
   const [savedFeedback, setSavedFeedback] = useState<string>('');
+  const [, setLiveTick] = useState<number>(() => Date.now());
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const timer = setInterval(() => {
+      setLiveTick(Date.now());
+    }, 15000);
+    return () => clearInterval(timer);
+  }, [isOpen]);
 
   const dragRef = useRef<DragMode | null>(null);
   const draftRef = useRef<TagLayoutTemplate>(draft);
@@ -724,12 +734,15 @@ export const TagLayoutStudioModal: React.FC<TagLayoutStudioModalProps> = ({
     if (!canEdit) return;
     const cleanName = saveAsName.trim();
     if (!cleanName) return;
+    const nowIso = new Date().toISOString();
     const copy: TagLayoutTemplate = {
       ...cloneTemplate(draft),
       id: `custom-${Date.now().toString(36)}`,
       name: cleanName,
       description: `Custom ${draft.sticker.widthMm}×${draft.sticker.heightMm} mm · Kertas ${draft.sheet.preset}`,
       isBuiltIn: false,
+      createdAt: nowIso,
+      updatedAt: nowIso,
     };
     const saved = onSaveTemplate(copy, true);
     setDraft(cloneTemplate(saved));
@@ -862,6 +875,7 @@ export const TagLayoutStudioModal: React.FC<TagLayoutStudioModalProps> = ({
                   value: t.id,
                   label: t.name,
                   badge: `${t.sticker.widthMm}×${t.sticker.heightMm}mm`,
+                  isNew: !t.isBuiltIn && isRecentlyCreated(t.createdAt, t.id),
                 }))}
               />
               <button

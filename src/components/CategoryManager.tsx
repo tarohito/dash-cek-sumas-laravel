@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { CategorySpecDrawer } from './CategorySpecDrawer';
 import { EmptyStatePanel } from './TableEmptyState';
+import { NewBadge, isRecentlyCreated } from './NewBadge';
 import { apiFetch } from '../utils/authSession';
 import { 
   Search, 
@@ -86,28 +87,14 @@ export const CategoryManager: React.FC<CategoryManagerProps> = ({ currentRole = 
     return 'Varian / Jenis';
   };
 
-  const isRecentlyCreated = (createdAt?: string | null, idVal?: string | null, maxMinutes = 5): boolean => {
-    if (!createdAt && !idVal) return false;
-    const lower = String(createdAt || '').toLowerCase();
-    if (lower.includes('baru saja') || lower.includes('menit yang lalu')) return true;
-    
-    if (idVal && typeof idVal === 'string') {
-      const numericPart = idVal.replace(/^[a-zA-Z_-]+/, '');
-      if (/^\d{12,14}$/.test(numericPart)) {
-        const dtFromId = new Date(Number(numericPart));
-        if (!isNaN(dtFromId.getTime())) {
-          const diffMs = Date.now() - dtFromId.getTime();
-          return diffMs >= -60000 && diffMs <= maxMinutes * 60 * 1000;
-        }
-      }
-    }
-
-    if (!createdAt) return false;
-    const dt = new Date(createdAt);
-    if (isNaN(dt.getTime())) return false;
-    const diffMs = Date.now() - dt.getTime();
-    return diffMs >= -60000 && diffMs <= maxMinutes * 60 * 1000;
-  };
+  // Live timer ticker agar badge BARU otomatis hilang setelah 5 menit tanpa refresh halaman
+  const [, setLiveTick] = useState<number>(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setLiveTick(Date.now());
+    }, 15000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Fetch categories from SQLite API
   const fetchCategories = async () => {
@@ -583,12 +570,7 @@ export const CategoryManager: React.FC<CategoryManagerProps> = ({ currentRole = 
                               } catch {}
                               return null;
                             })()}
-                            {isRecentlyCreated(item.createdAt, item.id) && (
-                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 tracking-wide uppercase shrink-0">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                                Baru
-                              </span>
-                            )}
+                            <NewBadge date={item.createdAt} id={item.id} />
                           </div>
 
                           {/* AKSI: EDIT & HAPUS */}
@@ -771,12 +753,7 @@ export const CategoryManager: React.FC<CategoryManagerProps> = ({ currentRole = 
                               } catch {}
                               return null;
                             })()}
-                            {isRecentlyCreated(item.createdAt, item.id) && (
-                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 tracking-wide uppercase shrink-0">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                                Baru
-                              </span>
-                            )}
+                            <NewBadge date={item.createdAt} id={item.id} />
                           </div>
 
                           {/* AKSI: EDIT & HAPUS */}
@@ -959,12 +936,7 @@ export const CategoryManager: React.FC<CategoryManagerProps> = ({ currentRole = 
                               } catch {}
                               return null;
                             })()}
-                            {isRecentlyCreated(item.createdAt, item.id) && (
-                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25 tracking-wide uppercase shrink-0">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                                Baru
-                              </span>
-                            )}
+                            <NewBadge date={item.createdAt} id={item.id} />
                           </div>
 
                           {/* AKSI: EDIT & HAPUS */}

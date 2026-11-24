@@ -238,7 +238,7 @@ class ScanController extends Controller
                 'anomalyReason' => $evaluation['anomalyReasonText'],
                 'deviceInfo' => $evaluation['historyEntry']['device'],
                 'scanHistory' => json_encode($updatedHistory),
-                'createdAt' => gmdate('Y-m-d'),
+                'createdAt' => gmdate('Y-m-d\TH:i:s\Z'),
             ]);
         }
 

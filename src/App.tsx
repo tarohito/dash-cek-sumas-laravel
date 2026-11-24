@@ -97,6 +97,13 @@ import {
 } from './components/NotificationPanel';
 import { TableEmptyRow, EmptyStatePanel } from './components/TableEmptyState';
 import {
+  NewBadge,
+  parseFlexibleDate,
+  isRecentlyCreated,
+  getRelativeCreatedTime,
+  formatDateTimeDisplay,
+} from './components/NewBadge';
+import {
   ALL_PERMISSIONS,
   ALL_ROLES,
   DEFAULT_ROLE_PERMISSIONS,
@@ -137,95 +144,7 @@ import {
   getInitialsAvatar,
 } from './utils/avatar';
 
-// ==========================================
-// HELPER & BADGE UNTUK DATA BARU DIBUAT (NEW BADGE)
-// ==========================================
-const parseFlexibleDate = (dateVal?: string | null, idVal?: string | null): Date | null => {
-  // If item ID contains timestamp (e.g. b1730700000000, br-1730700000000, u1730700000000)
-  if (idVal && typeof idVal === 'string') {
-    const numericPart = idVal.replace(/^[a-zA-Z_-]+/, '');
-    if (/^\d{12,14}$/.test(numericPart)) {
-      const dtFromId = new Date(Number(numericPart));
-      if (!isNaN(dtFromId.getTime())) return dtFromId;
-    }
-  }
-
-  if (!dateVal) return null;
-  const str = String(dateVal).trim();
-  if (!str) return null;
-
-  // Numeric timestamp in string or number form
-  if (/^\d{12,14}$/.test(str)) {
-    const d = new Date(Number(str));
-    if (!isNaN(d.getTime())) return d;
-  }
-
-  // Direct ISO parse
-  const direct = new Date(str);
-  if (!isNaN(direct.getTime()) && !str.includes(' ') && str.includes('-')) return direct;
-
-  // Indonesian format parse: "28 Okt 2026, 09:15" or "4 Nov 2026, 16.14" or "4 Nov 2026"
-  const bulanMap: { [key: string]: number } = {
-    jan: 0, feb: 1, mar: 2, apr: 3, mei: 4, jun: 5,
-    jul: 6, agu: 7, agt: 7, sep: 8, okt: 9, nov: 10, des: 11
-  };
-  const parts = str.replace(/,/g, '').split(/\s+/);
-  if (parts.length >= 3) {
-    const day = parseInt(parts[0], 10);
-    const monthKey = parts[1].substring(0, 3).toLowerCase();
-    const year = parseInt(parts[2], 10);
-    if (!isNaN(day) && !isNaN(year) && bulanMap[monthKey] !== undefined) {
-      let hours = 0;
-      let minutes = 0;
-      if (parts[3]) {
-        const timeParts = parts[3].split(/[:.]/);
-        hours = parseInt(timeParts[0], 10) || 0;
-        minutes = parseInt(timeParts[1], 10) || 0;
-      }
-      return new Date(year, bulanMap[monthKey], day, hours, minutes);
-    }
-  }
-
-  if (!isNaN(direct.getTime())) return direct;
-
-  return null;
-};
-
-// Data baru dianggap "Baru" selama maxMinutes (default 5 menit), setelah itu badge otomatis hilang
-const isRecentlyCreated = (createdAt?: string | null, idVal?: string | null, maxMinutes = 5): boolean => {
-  if (!createdAt && !idVal) return false;
-  const lower = String(createdAt || '').toLowerCase();
-  if (lower.includes('baru saja') || lower.includes('menit yang lalu')) return true;
-
-  const dt = parseFlexibleDate(createdAt, idVal);
-  if (!dt) return false;
-
-  const diffMs = Date.now() - dt.getTime();
-  // Valid dalam rentang maxMinutes (5 menit lalu otomatis hilang)
-  return diffMs >= -60000 && diffMs <= maxMinutes * 60 * 1000;
-};
-
-const getRelativeCreatedTime = (createdAt?: string | null, idVal?: string | null): string => {
-  if (!createdAt && !idVal) return 'baru saja';
-  const lower = String(createdAt || '').toLowerCase();
-  if (lower.includes('baru saja')) return 'baru saja';
-  if (lower.includes('menit yang lalu')) return lower;
-
-  const dt = parseFlexibleDate(createdAt, idVal);
-  if (!dt) return 'baru saja';
-
-  const diffSeconds = Math.max(0, Math.floor((Date.now() - dt.getTime()) / 1000));
-  if (diffSeconds < 60) return '< 1 mnt';
-  const diffMinutes = Math.floor(diffSeconds / 60);
-  return `${diffMinutes} mnt`;
-};
-
-const formatDateTimeDisplay = (dateVal?: string | null, idVal?: string | null): string => {
-  if (!dateVal && !idVal) return 'Katalog Master';
-  const dt = parseFlexibleDate(dateVal, idVal);
-  if (!dt) return String(dateVal || 'Katalog Master');
-  return dt.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
-};
+// Helper tanggal & badge "Baru" kini dikelola terpusat di ./components/NewBadge.tsx
 
 // Registry untuk mendeteksi brand B2B yang berhak alokasi proyek (dinamis berdasarkan businessType di master database)
 export const b2bBrandsRegistry = new Set<string>();
@@ -284,34 +203,6 @@ export const BusinessTypeBadge: React.FC<{
   );
 };
 
-const NewBadge: React.FC<{ 
-  date?: string | null; 
-  id?: string | null; 
-  label?: string; 
-  className?: string; 
-  maxMinutes?: number;
-}> = ({
-  date,
-  id,
-  label = 'Baru',
-  className = '',
-  maxMinutes = 5
-}) => {
-  if (!isRecentlyCreated(date, id, maxMinutes)) return null;
-
-  return (
-    <span
-      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-400 border border-emerald-300 dark:border-emerald-700/80 tracking-wider uppercase select-none transition-all  shrink-0 ${className}`}
-    >
-      <span className="relative flex h-1.5 w-1.5">
-        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
-      </span>
-      <span>{label}</span>
-    </span>
-  );
-};
-
 // ==========================================
 // KOMPONEN CUSTOM SELECT (REUSABLE)
 // ==========================================
@@ -321,6 +212,7 @@ interface CustomSelectOption {
   sublabel?: string;
   badge?: string;
   avatar?: string | null;
+  isNew?: boolean;
 }
 
 const CustomSelect = ({ 
@@ -453,6 +345,7 @@ const CustomSelect = ({
           <span className={selectedOpt ? 'font-medium truncate' : 'text-slate-400 dark:text-zinc-500 truncate'}>
             {selectedOpt ? (selectedOpt.sublabel ? `${selectedOpt.label} (${selectedOpt.sublabel})` : selectedOpt.label) : placeholder}
           </span>
+          {selectedOpt?.isNew && <NewBadge force size="xs" />}
           {selectedOpt?.badge && (
             <span className="hidden sm:inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 flex-shrink-0">
               {selectedOpt.badge}
@@ -556,10 +449,15 @@ const CustomSelect = ({
                       )}
                     </div>
                   </div>
-                  {opt.badge && (
-                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-zinc-700 text-slate-600 dark:text-zinc-300 border border-slate-200 dark:border-zinc-600 flex-shrink-0 whitespace-nowrap">
-                      {opt.badge}
-                    </span>
+                  {(opt.isNew || opt.badge) && (
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      {opt.isNew && <NewBadge force size="xs" />}
+                      {opt.badge && (
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 dark:bg-zinc-700 text-slate-600 dark:text-zinc-300 border border-slate-200 dark:border-zinc-600 whitespace-nowrap">
+                          {opt.badge}
+                        </span>
+                      )}
+                    </div>
                   )}
                 </div>
               ))
@@ -2242,9 +2140,11 @@ export default function App() {
       return activeTagTemplate;
     }
 
+    const nowIso = new Date().toISOString();
     const updated: TagLayoutTemplate = {
       ...template,
-      updatedAt: new Date().toISOString(),
+      createdAt: saveAsNew ? nowIso : (template.createdAt || (!template.isBuiltIn ? nowIso : undefined)),
+      updatedAt: nowIso,
     };
     const prevTemplates = tagTemplates;
     const prevSelectedId = selectedTagTemplateId;
@@ -7453,8 +7353,9 @@ export default function App() {
                           {/* 1. Waktu Scan */}
                           <td className="px-5 py-3.5 whitespace-nowrap">
                             <div className="leading-tight">
-                              <div className="font-bold text-slate-800 dark:text-zinc-100 text-xs sm:text-sm">
-                                {timeInfo.dateStr}
+                              <div className="flex items-center gap-1.5 font-bold text-slate-800 dark:text-zinc-100 text-xs sm:text-sm">
+                                <span>{timeInfo.dateStr}</span>
+                                <NewBadge date={item.scanHistory?.[0]?.scannedAtIso || item.latestTime || item.createdAt} size="xs" />
                               </div>
                               <div className="flex items-center gap-1.5 mt-1 text-[11px] sm:text-xs text-slate-400 dark:text-zinc-500">
                                 <span className="font-mono font-medium text-slate-600 dark:text-zinc-300">{timeInfo.timeStr}</span>
@@ -8990,7 +8891,10 @@ export default function App() {
                     {/* BATCH ID */}
                     <div className="shrink-0 w-auto">
                       <span className="text-slate-400 dark:text-zinc-500 block text-[10px] uppercase font-semibold tracking-wider">Batch ID</span>
-                      <span className="font-bold text-slate-800 dark:text-zinc-100 block font-mono mt-0.5 whitespace-nowrap">{activeBatch?.batchId}</span>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className="font-bold text-slate-800 dark:text-zinc-100 block font-mono whitespace-nowrap">{activeBatch?.batchId}</span>
+                        <NewBadge date={activeBatch?.createdAt || activeBatch?.date} id={activeBatch?.id} size="xs" />
+                      </div>
                     </div>
 
                     {/* BRAND & SKU */}
@@ -9533,9 +9437,12 @@ export default function App() {
                             </div>
                           </div>
                           <div className="ml-12 bg-white dark:bg-zinc-900 border border-slate-100 dark:border-zinc-700 rounded-xl p-3 sm:p-4 flex-1 text-xs sm:text-sm">
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="font-bold text-slate-700 dark:text-zinc-200">{log.user}</span>
-                              <span className="text-[10px] sm:text-xs text-slate-400 dark:text-zinc-500">{log.timestamp}</span>
+                            <div className="flex items-center justify-between gap-2 mb-2">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="font-bold text-slate-700 dark:text-zinc-200 truncate">{log.user}</span>
+                                <NewBadge date={log.timestamp} id={String(log.id)} size="xs" />
+                              </div>
+                              <span className="text-[10px] sm:text-xs text-slate-400 dark:text-zinc-500 shrink-0">{log.timestamp}</span>
                             </div>
                             <div className="mb-3">
                               <span className="text-[10px] sm:text-xs font-semibold text-slate-500 dark:text-zinc-400 block mb-1">Alasan Perubahan:</span>
@@ -10100,6 +10007,7 @@ export default function App() {
                         value: tpl.id,
                         label: tpl.name,
                         badge: tpl.sheet.preset,
+                        isNew: !tpl.isBuiltIn && isRecentlyCreated(tpl.createdAt, tpl.id),
                       }))}
                     />
                   </div>
@@ -11067,6 +10975,9 @@ export default function App() {
                               <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-800 dark:text-zinc-100 leading-snug">
                                 {userToView.name}
                               </h2>
+                              {!(currentUser && userToView.id === currentUser.id) && (
+                                <NewBadge date={userToView.createdAt} id={userToView.id} />
+                              )}
                               <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${
                                 userToView.status === 'Aktif'
                                   ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/60'
@@ -11816,6 +11727,7 @@ export default function App() {
                               <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-800 dark:text-zinc-100 leading-snug">
                                 {brandToView.name}
                               </h2>
+                              <NewBadge date={brandToView.createdAt} id={brandToView.id} />
                               <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold ${
                                 brandToView.status === 'Aktif'
                                   ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/60'
@@ -12788,9 +12700,12 @@ export default function App() {
                                 {categoryParts.join(' › ')}
                               </div>
                             )}
-                            <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-800 dark:text-zinc-100 leading-snug">
-                              {prod.sku}
-                            </h2>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-800 dark:text-zinc-100 leading-snug">
+                                {prod.sku}
+                              </h2>
+                              <NewBadge date={prod.createdAt} id={prod.id} />
+                            </div>
 
                             {/* SKU BADGE (HAPUS KATA 'ID', SEHINGGA MENJADI: SKU • KODE) */}
                             <div className="mt-1.5 inline-flex items-center gap-1.5 px-2.5 py-1 bg-slate-50 dark:bg-zinc-800/70 rounded-xl border border-slate-200/80 dark:border-zinc-700/70 text-xs font-mono font-semibold text-slate-700 dark:text-zinc-300">

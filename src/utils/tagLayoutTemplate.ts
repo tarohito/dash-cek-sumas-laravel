@@ -103,6 +103,7 @@ export interface TagLayoutTemplate {
   name: string;
   description: string;
   isBuiltIn?: boolean;
+  createdAt?: string;
   updatedAt?: string;
   sticker: {
     widthMm: number;

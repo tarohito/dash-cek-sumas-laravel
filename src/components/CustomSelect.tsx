@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, ChevronDown, Search, X } from 'lucide-react';
 import { getAvatarColorCss, getInitials, getInitialsAvatar } from '../utils/avatar';
+import { NewBadge } from './NewBadge';
 
 export interface CustomSelectOption {
   value: string;
@@ -9,6 +10,7 @@ export interface CustomSelectOption {
   sublabel?: string;
   badge?: string;
   avatar?: string | null;
+  isNew?: boolean;
 }
 
 export interface CustomSelectProps {
@@ -143,6 +145,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
           <span className={selectedOpt ? 'font-medium truncate' : 'text-slate-400 dark:text-zinc-500 truncate'}>
             {selectedOpt ? (selectedOpt.sublabel ? `${selectedOpt.label} (${selectedOpt.sublabel})` : selectedOpt.label) : placeholder}
           </span>
+          {selectedOpt?.isNew && <NewBadge force size="xs" />}
           {selectedOpt?.badge && (
             <span className="hidden sm:inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 flex-shrink-0">
               {selectedOpt.badge}
@@ -256,6 +259,7 @@ export const CustomSelect: React.FC<CustomSelectProps> = ({
                         </div>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
+                        {opt.isNew && <NewBadge force size="xs" />}
                         {opt.badge && (
                           <span className="text-[10px] font-semibold px-2 py-0.5 rounded-lg bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300 border border-slate-200 dark:border-zinc-700 whitespace-nowrap">
                             {opt.badge}
