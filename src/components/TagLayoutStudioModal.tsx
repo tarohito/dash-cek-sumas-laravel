@@ -1687,7 +1687,6 @@ export const TagLayoutStudioModal: React.FC<TagLayoutStudioModalProps> = ({
                           Huruf Kapital (UPPERCASE)
                         </span>
                         <CustomCheckbox
-                          size="sm"
                           checked={selectedLayer.uppercase}
                           onChange={(checked) => updateSelectedLayer({ uppercase: checked })}
                           ariaLabel="Huruf Kapital (UPPERCASE)"
@@ -2085,7 +2084,6 @@ export const TagLayoutStudioModal: React.FC<TagLayoutStudioModalProps> = ({
                           className="w-5 h-5 rounded cursor-pointer border-0 bg-transparent p-0"
                         />
                         <CustomCheckbox
-                          size="sm"
                           checked={draft.sticker.showCutLine}
                           onChange={(checked) =>
                             updateDraft((prev) => ({
@@ -2248,7 +2246,6 @@ export const TagLayoutStudioModal: React.FC<TagLayoutStudioModalProps> = ({
                         Sensor Marks Sudut Kertas
                       </span>
                       <CustomCheckbox
-                        size="sm"
                         checked={draft.sheet.showRegistrationMarks}
                         onChange={(checked) =>
                           updateDraft((prev) => ({

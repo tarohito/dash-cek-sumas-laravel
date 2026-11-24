@@ -391,7 +391,6 @@ export const CategorySpecDrawer: React.FC<CategorySpecDrawerProps> = ({
                       <CustomCheckbox
                         checked={Boolean(field.required)}
                         onChange={(next) => handleUpdateField(field.id, { required: next })}
-                        size="sm"
                         label={field.required ? 'Wajib diisi' : 'Opsional'}
                       />
                     </div>

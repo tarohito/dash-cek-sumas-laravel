@@ -310,7 +310,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                       id="login-remember"
                       checked={rememberMe}
                       onChange={setRememberMe}
-                      size="sm"
                       label="Ingat saya"
                     />
                   </div>

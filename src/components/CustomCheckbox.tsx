@@ -1,50 +1,52 @@
 import React from 'react';
-import { Check } from 'lucide-react';
+import { Check, Minus } from 'lucide-react';
 
 export interface CustomCheckboxProps {
   checked: boolean;
+  indeterminate?: boolean;
   onChange: (checked: boolean) => void;
   disabled?: boolean;
   locked?: boolean;
   id?: string;
   label?: string;
   ariaLabel?: string;
-  size?: 'sm' | 'md';
+  'aria-label'?: string;
   className?: string;
 }
 
 export const CustomCheckbox: React.FC<CustomCheckboxProps> = ({
   checked,
+  indeterminate = false,
   onChange,
   disabled = false,
   locked = false,
   id,
   label,
   ariaLabel,
-  size = 'md',
+  'aria-label': nativeAriaLabel,
   className = '',
 }) => {
   const isDisabled = disabled || locked;
-  const boxSize = size === 'sm' ? 'w-[18px] h-[18px] rounded-[6px]' : 'w-5 h-5 rounded-[7px]';
-  const iconSize = size === 'sm' ? 12 : 13;
+  const isFilled = checked || indeterminate;
+  const resolvedAriaLabel = ariaLabel || nativeAriaLabel || label;
 
   const box = (
     <button
       type="button"
       role="checkbox"
-      aria-checked={checked}
-      aria-label={ariaLabel || label}
+      aria-checked={indeterminate ? 'mixed' : checked}
+      aria-label={resolvedAriaLabel}
       id={id}
       disabled={isDisabled}
       onClick={(e) => {
         if (label) e.stopPropagation();
         if (!isDisabled) onChange(!checked);
       }}
-      className={`${boxSize} inline-flex items-center justify-center shrink-0 border transition-all duration-150 outline-none focus-visible:ring-2 focus-visible:ring-[#c28e62]/40 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-zinc-900 select-none ${
-        checked
+      className={`w-[18px] h-[18px] rounded-[6px] inline-flex items-center justify-center shrink-0 border transition-all duration-150 outline-none focus-visible:ring-2 focus-visible:ring-[#c28e62]/40 focus-visible:ring-offset-1 dark:focus-visible:ring-offset-zinc-900 select-none ${
+        isFilled
           ? locked
             ? 'bg-slate-600 dark:bg-zinc-600 border-slate-600 dark:border-zinc-600 text-white'
-            : 'bg-[#c28e62] border-[#b07d53] text-white shadow-2xs'
+            : 'bg-[#c28e62] border-[#b07d53] text-white'
           : 'bg-white dark:bg-zinc-900 border-slate-300 dark:border-zinc-600 hover:border-[#c28e62] dark:hover:border-[#c28e62]'
       } ${
         isDisabled
@@ -52,18 +54,24 @@ export const CustomCheckbox: React.FC<CustomCheckboxProps> = ({
           : 'cursor-pointer active:scale-90'
       }`}
     >
-      {checked && (
-        <Check
-          size={iconSize}
+      {indeterminate ? (
+        <Minus
+          size={12}
           strokeWidth={3}
           className="text-white animate-in zoom-in-75 duration-150"
         />
-      )}
+      ) : checked ? (
+        <Check
+          size={12}
+          strokeWidth={3}
+          className="text-white animate-in zoom-in-75 duration-150"
+        />
+      ) : null}
     </button>
   );
 
   if (!label) {
-    return <span className={`inline-flex items-center ${className}`}>{box}</span>;
+    return <span className={`inline-flex items-center justify-center ${className}`}>{box}</span>;
   }
 
   return (
