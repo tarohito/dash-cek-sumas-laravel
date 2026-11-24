@@ -103,7 +103,7 @@ class BatchController extends Controller
         }
 
         $pinLength = min(12, max(4, (int) ($b['pinLength'] ?? 8) ?: 8));
-        $pinFormat = ($b['pinFormat'] ?? 'alphanumeric') === 'numeric' ? 'numeric' : 'alphanumeric';
+        $pinFormat = 'alphanumeric';
         $isB2B = !empty($b['isB2B']) ? 1 : 0;
 
         $urlCheck = SecurityHardeningService::validateHttpUrl($b['redirectUrl'] ?? '', true, 'https://cek.sumas.id/');

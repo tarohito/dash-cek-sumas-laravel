@@ -676,7 +676,6 @@ export default function App() {
 
   const [selectedSku, setSelectedSku] = useState('');
   const [selectedPinLength, setSelectedPinLength] = useState('8');
-  const [selectedPinFormat, setSelectedPinFormat] = useState<'alphanumeric' | 'numeric'>('alphanumeric');
   
   // TEMA & ANIMASI
   const [isDarkMode, setIsDarkMode] = useState(() => {
@@ -4246,7 +4245,7 @@ export default function App() {
       qty: Number(formQty),
       specs: '-', 
       pinLength: Number(selectedPinLength),
-      pinFormat: selectedPinFormat,
+      pinFormat: 'alphanumeric' as const,
       status: 'Aktif', // Status batch aktif normal
       isB2B: isBrandB2B ? 1 : 0,
       redirectUrl: (formRedirectUrl && formRedirectUrl.trim()) || 'https://cek.sumas.id/',
@@ -4272,7 +4271,7 @@ export default function App() {
         if (freshStats) setDashboardStats(freshStats);
         triggerAlert(
           'Batch Berhasil Dibuat',
-          `Batch "${newBatch.batchId}" (${newBatch.qty} tag) berhasil di-generate dengan PIN ${newBatch.pinLength} digit ${selectedPinFormat === 'alphanumeric' ? 'Huruf & Angka' : 'Angka'}.`,
+          `Batch "${newBatch.batchId}" (${newBatch.qty} tag) berhasil di-generate dengan PIN ${newBatch.pinLength} digit Huruf & Angka.`,
           'success'
         );
       })
@@ -8451,40 +8450,6 @@ export default function App() {
                 </div>
               </div>
 
-              {/* FORMAT KARAKTER PIN */}
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1.5 flex items-center justify-between">
-                  <span>Format Karakter PIN</span>
-                  <span className="text-[10px] text-slate-400 dark:text-zinc-500 font-medium">
-                    {selectedPinFormat === 'alphanumeric' ? 'Anti-ambigu (tanpa O/0/I/1)' : 'Numerik standar'}
-                  </span>
-                </label>
-                <div className="grid grid-cols-2 gap-2 h-[42px] p-1 bg-slate-100 dark:bg-zinc-800 rounded-full">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedPinFormat('alphanumeric')}
-                    className={`text-xs font-semibold rounded-full transition-colors cursor-pointer ${
-                      selectedPinFormat === 'alphanumeric'
-                        ? 'bg-white dark:bg-zinc-900 text-[#c28e62]'
-                        : 'text-slate-500 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-zinc-200'
-                    }`}
-                  >
-                    Huruf &amp; Angka (Default)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedPinFormat('numeric')}
-                    className={`text-xs font-semibold rounded-full transition-colors cursor-pointer ${
-                      selectedPinFormat === 'numeric'
-                        ? 'bg-white dark:bg-zinc-900 text-[#c28e62]'
-                        : 'text-slate-500 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-zinc-200'
-                    }`}
-                  >
-                    Angka Saja (0–9)
-                  </button>
-                </div>
-              </div>
-
               {/* BARIS 3: TIPE QR CODE - 1 KOLOM UTUH */}
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1.5">
@@ -8531,13 +8496,13 @@ export default function App() {
               </div>
 
               {/* INFO FORMAT ID TAG & PIN OTOMATIS */}
-              <div className="px-5 py-2.5 bg-slate-50 dark:bg-zinc-800/60 border border-slate-200/80 dark:border-zinc-700/70 rounded-full flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1.5 text-xs text-slate-500 dark:text-zinc-400">
-                <span className="flex items-center gap-1.5">
+              <div className="px-4 py-2.5 bg-slate-50 dark:bg-zinc-800/60 border border-slate-200/80 dark:border-zinc-700/70 rounded-full flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 text-xs text-slate-500 dark:text-zinc-400">
+                <span className="flex items-center gap-1.5 whitespace-nowrap shrink-0">
                   <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                  <span>Format ID & PIN:</span>
+                  <span>Format:</span>
                 </span>
-                <span className="font-mono text-[11px] font-bold text-slate-800 dark:text-zinc-200 bg-white dark:bg-zinc-900 px-3 py-1 rounded-full border border-slate-200 dark:border-zinc-700">
-                  ID: 8 Karakter Alfanumerik • PIN: {selectedPinLength} Digit {selectedPinFormat === 'alphanumeric' ? 'Huruf & Angka' : 'Angka'}
+                <span className="font-mono text-[11px] font-bold text-slate-800 dark:text-zinc-200 bg-white dark:bg-zinc-900 px-3 py-1 rounded-full border border-slate-200 dark:border-zinc-700 whitespace-nowrap">
+                  ID 8 &amp; PIN {selectedPinLength} Digit (Huruf &amp; Angka)
                 </span>
               </div>
             </div>
