@@ -122,7 +122,7 @@ function setDocFont(doc: jsPDF, family: TagFontFamily, weight: 'bold' | 'normal'
 }
 
 /**
- * Menghasilkan image data URL untuk QR Code menggunakan qrcode library
+ * Menghasilkan image data URL untuk QR Code menggunakan qrcode library (untuk preview UI)
  */
 export async function createQrCodeDataUrl(
   payload: string,
@@ -146,6 +146,180 @@ export async function createQrCodeDataUrl(
   } catch (err) {
     console.error('Gagal generate QR Code:', err);
     return 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=';
+  }
+}
+
+export interface VectorQrData {
+  size: number;
+  margin: number;
+  loops: Array<Array<[number, number]>>;
+}
+
+function qrModulesToLoops(modules: { size: number; get: (row: number, col: number) => number }): Array<Array<[number, number]>> {
+  const n = modules.size;
+  const isDark = (r: number, c: number): boolean =>
+    r >= 0 && r < n && c >= 0 && c < n && Boolean(modules.get(r, c));
+
+  type DirectedEdge = {
+    sx: number;
+    sy: number;
+    ex: number;
+    ey: number;
+    dx: number;
+    dy: number;
+    used: boolean;
+  };
+
+  const edgeMap = new Map<string, DirectedEdge[]>();
+  const addEdge = (sx: number, sy: number, ex: number, ey: number): void => {
+    const key = `${sx},${sy}`;
+    let list = edgeMap.get(key);
+    if (!list) {
+      list = [];
+      edgeMap.set(key, list);
+    }
+    list.push({ sx, sy, ex, ey, dx: ex - sx, dy: ey - sy, used: false });
+  };
+
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      if (!isDark(r, c)) continue;
+      if (!isDark(r - 1, c)) addEdge(c, r, c + 1, r); // East
+      if (!isDark(r, c + 1)) addEdge(c + 1, r, c + 1, r + 1); // South
+      if (!isDark(r + 1, c)) addEdge(c + 1, r + 1, c, r + 1); // West
+      if (!isDark(r, c - 1)) addEdge(c, r + 1, c, r); // North
+    }
+  }
+
+  const loops: Array<Array<[number, number]>> = [];
+  for (const edges of edgeMap.values()) {
+    for (const startEdge of edges) {
+      if (startEdge.used) continue;
+      const pts: Array<[number, number]> = [];
+      let cur: DirectedEdge | undefined = startEdge;
+      while (cur && !cur.used) {
+        const edge: DirectedEdge = cur;
+        edge.used = true;
+        pts.push([edge.sx, edge.sy]);
+        const nextList: DirectedEdge[] = edgeMap.get(`${edge.ex},${edge.ey}`) || [];
+        const rx = -edge.dy;
+        const ry = edge.dx;
+        const sx = edge.dx;
+        const sy = edge.dy;
+        cur =
+          nextList.find((e) => !e.used && e.dx === rx && e.dy === ry) ||
+          nextList.find((e) => !e.used && e.dx === sx && e.dy === sy) ||
+          nextList.find((e) => !e.used);
+      }
+
+      // Gabungkan segmen kolinear agar path Illustrator bersih tanpa titik berlebih
+      const simplified: Array<[number, number]> = [];
+      const len = pts.length;
+      for (let i = 0; i < len; i++) {
+        const prev = pts[(i - 1 + len) % len];
+        const curr = pts[i];
+        const next = pts[(i + 1) % len];
+        if ((curr[0] - prev[0]) * (next[1] - curr[1]) === (curr[1] - prev[1]) * (next[0] - curr[0])) {
+          continue;
+        }
+        simplified.push(curr);
+      }
+      if (simplified.length >= 3) {
+        loops.push(simplified);
+      }
+    }
+  }
+
+  return loops;
+}
+
+/**
+ * Menghasilkan geometri vektor QR Code murni (outline polygon loops)
+ */
+export function createVectorQrData(
+  payload: string,
+  options?: {
+    margin?: number;
+    errorCorrectionLevel?: 'L' | 'M' | 'Q' | 'H';
+  }
+): VectorQrData {
+  try {
+    const qr = QRCode.create(payload, {
+      errorCorrectionLevel: options?.errorCorrectionLevel ?? 'M',
+    });
+    const margin = Math.max(0, Number(options?.margin ?? 2) || 0);
+    return {
+      size: qr.modules.size,
+      margin,
+      loops: qrModulesToLoops(qr.modules),
+    };
+  } catch (err) {
+    console.error('Gagal generate vector QR Code:', err);
+    return { size: 1, margin: 0, loops: [] };
+  }
+}
+
+function drawVectorQrInPdf(
+  doc: jsPDF,
+  vectorQr: VectorQrData,
+  lx: number,
+  ly: number,
+  lw: number,
+  lh: number,
+  rot: number,
+  darkColor?: string,
+  lightColor?: string
+): void {
+  const cx = lx + lw / 2;
+  const cy = ly + lh / 2;
+
+  // 1. Kotak latar belakang / quiet zone QR dalam bentuk vektor
+  const [lr, lg, lb] = hexToRgb(lightColor, [255, 255, 255]);
+  doc.setFillColor(lr, lg, lb);
+  if (!rot) {
+    doc.rect(lx, ly, lw, lh, 'F');
+  } else {
+    const p1 = rotatePointCW(lx, ly, cx, cy, rot);
+    const p2 = rotatePointCW(lx + lw, ly, cx, cy, rot);
+    const p3 = rotatePointCW(lx + lw, ly + lh, cx, cy, rot);
+    const p4 = rotatePointCW(lx, ly + lh, cx, cy, rot);
+    doc.path([
+      { op: 'm', c: [p1.x, p1.y] },
+      { op: 'l', c: [p2.x, p2.y] },
+      { op: 'l', c: [p3.x, p3.y] },
+      { op: 'l', c: [p4.x, p4.y] },
+      { op: 'h' },
+    ]);
+    doc.fill();
+  }
+
+  // 2. Modul gelap QR sebagai satu compound path vektor murni (tanpa bitmap/raster)
+  const totalUnits = vectorQr.size + vectorQr.margin * 2;
+  if (totalUnits <= 0 || vectorQr.loops.length === 0) return;
+
+  const modW = lw / totalUnits;
+  const modH = lh / totalUnits;
+  const ops: Array<{ op: 'm' | 'l' | 'h'; c?: number[] }> = [];
+
+  for (const poly of vectorQr.loops) {
+    if (poly.length < 3) continue;
+    for (let i = 0; i < poly.length; i++) {
+      const rawX = lx + (poly[i][0] + vectorQr.margin) * modW;
+      const rawY = ly + (poly[i][1] + vectorQr.margin) * modH;
+      const pt = rot ? rotatePointCW(rawX, rawY, cx, cy, rot) : { x: rawX, y: rawY };
+      ops.push({
+        op: i === 0 ? 'm' : 'l',
+        c: [pt.x, pt.y],
+      });
+    }
+    ops.push({ op: 'h' });
+  }
+
+  if (ops.length > 0) {
+    const [dr, dg, db] = hexToRgb(darkColor, [0, 0, 0]);
+    doc.setFillColor(dr, dg, db);
+    doc.path(ops);
+    doc.fillEvenOdd();
   }
 }
 
@@ -211,7 +385,7 @@ function renderLayerInPdf(
   stickerY: number,
   batch: BatchItem,
   tag: TagItem,
-  qrDataUrl?: string
+  vectorQr?: VectorQrData
 ): void {
   if (!layer.visible) return;
 
@@ -400,8 +574,18 @@ function renderLayerInPdf(
     }
 
     case 'qr': {
-      if (!qrDataUrl) break;
-      doc.addImage(qrDataUrl, 'PNG', lx, ly, lw, lh, undefined, 'FAST');
+      if (!vectorQr) break;
+      drawVectorQrInPdf(
+        doc,
+        vectorQr,
+        lx,
+        ly,
+        lw,
+        lh,
+        rot,
+        layer.qrDarkColor,
+        layer.qrLightColor
+      );
       break;
     }
   }
@@ -444,26 +628,29 @@ export async function generateCustomStickersPdf(
   const totalPages = Math.max(1, Math.ceil(tags.length / STICKERS_PER_PAGE));
 
   const qrLayers = template.layers.filter((l) => l.type === 'qr' && l.visible);
-  const qrCacheByLayer = new Map<string, Map<string, string>>();
+  const qrVectorCacheByLayer = new Map<string, Map<string, VectorQrData>>();
 
   for (const qrLayer of qrLayers) {
     if (qrLayer.type !== 'qr') continue;
-    const layerMap = new Map<string, string>();
+    const layerMap = new Map<string, VectorQrData>();
+    const payloadCache = new Map<string, VectorQrData>();
     for (let idx = 0; idx < tags.length; idx++) {
       const t = tags[idx];
       const payload = getQrCodePayload(batch, t);
-      const dataUrl = await createQrCodeDataUrl(payload, {
-        darkColor: qrLayer.qrDarkColor,
-        lightColor: qrLayer.qrLightColor,
-        margin: qrLayer.qrMargin,
-        errorCorrectionLevel: qrLayer.qrErrorCorrection,
-      });
-      layerMap.set(t.tagNumber, dataUrl);
-      if (onProgress && idx % 20 === 0) {
+      let vectorQr = payloadCache.get(payload);
+      if (!vectorQr) {
+        vectorQr = createVectorQrData(payload, {
+          margin: qrLayer.qrMargin,
+          errorCorrectionLevel: qrLayer.qrErrorCorrection,
+        });
+        payloadCache.set(payload, vectorQr);
+      }
+      layerMap.set(t.tagNumber, vectorQr);
+      if (onProgress && idx % 50 === 0) {
         onProgress(idx + 1, tags.length);
       }
     }
-    qrCacheByLayer.set(qrLayer.id, layerMap);
+    qrVectorCacheByLayer.set(qrLayer.id, layerMap);
   }
 
   const bgImageDataUrl = template.sticker.backgroundImageDataUrl || null;
@@ -525,9 +712,9 @@ export async function generateCustomStickersPdf(
 
       // Render semua layer dari bawah ke atas
       for (const layer of template.layers) {
-        const qrDataUrl =
-          layer.type === 'qr' ? qrCacheByLayer.get(layer.id)?.get(tag.tagNumber) : undefined;
-        renderLayerInPdf(doc, layer, x, y, batch, tag, qrDataUrl);
+        const vectorQr =
+          layer.type === 'qr' ? qrVectorCacheByLayer.get(layer.id)?.get(tag.tagNumber) : undefined;
+        renderLayerInPdf(doc, layer, x, y, batch, tag, vectorQr);
       }
 
       // Garis potong die-cut
