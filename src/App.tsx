@@ -80,6 +80,7 @@ import { CustomTooltipProvider } from './components/CustomTooltip';
 import { CategoryManager } from './components/CategoryManager';
 import { CreateSkuPage } from './components/CreateSkuPage';
 import { SettingsManager } from './components/SettingsManager';
+import { TrashManager, type TrashEntityType } from './components/TrashManager';
 import { LoginPage } from './components/LoginPage';
 import { SplashScreen } from './components/SplashScreen';
 import { RolePermissionsPanel } from './components/RolePermissionsPanel';
@@ -1115,7 +1116,22 @@ export default function App() {
         method: 'DELETE',
       });
       return parseApiResponse(res, 'Gagal menghapus template layout tag');
+    },
+    async getTrashCount() {
+      const res = await apiFetch('/api/trash/count');
+      return parseApiResponse(res, 'Gagal memuat jumlah Tempat Sampah');
     }
+  };
+
+  const [trashCount, setTrashCount] = useState<number>(0);
+  const refreshTrashCount = () => {
+    api.getTrashCount()
+      .then((res) => {
+        if (res && typeof res.count === 'number') {
+          setTrashCount(res.count);
+        }
+      })
+      .catch(() => {});
   };
 
   const [dbStatus, setDbStatus] = useState<'connected' | 'connecting' | 'fallback'>('connecting');
@@ -1562,6 +1578,7 @@ export default function App() {
   // Sinkronisasi otomatis saat berpindah ke menu Brand, SKU, atau Users
   useEffect(() => {
     if (!authUser?.id) return;
+    refreshTrashCount();
     if (activeMenu === 'brand' || activeMenu === 'users' || activeMenu === 'sku') {
       Promise.all([
         api.getBrands().catch(() => null),
@@ -2217,6 +2234,7 @@ export default function App() {
           setSelectedTagTemplateId(res.activeTemplateId);
           persistSelectedTagTemplateId(res.activeTemplateId);
         }
+        refreshTrashCount();
       })
       .catch((err: any) => {
         const msg = String(err?.message || '');
@@ -2969,9 +2987,10 @@ export default function App() {
       await api.deleteBrand(brandId);
       const freshBrands = await api.getBrands();
       if (Array.isArray(freshBrands)) setBrands(freshBrands);
+      refreshTrashCount();
       triggerAlert(
-        'Brand Berhasil Dihapus',
-        `Brand "${brandName}" telah berhasil dihapus dari sistem.`,
+        'Dipindahkan ke Tempat Sampah',
+        `Brand "${brandName}" dipindahkan ke Tempat Sampah (tersimpan 30 hari).`,
         'success'
       );
     } catch (err) {
@@ -3482,9 +3501,10 @@ export default function App() {
       const [freshUsers, freshBrands] = await Promise.all([api.getUsers(), api.getBrands()]);
       if (Array.isArray(freshUsers)) setUsers(freshUsers);
       if (Array.isArray(freshBrands)) setBrands(freshBrands);
+      refreshTrashCount();
       triggerAlert(
-        'Akun Berhasil Dihapus',
-        `Pengguna "${userName}" berhasil dihapus dari sistem.`,
+        'Dipindahkan ke Tempat Sampah',
+        `Pengguna "${userName}" dipindahkan ke Tempat Sampah (tersimpan 30 hari).`,
         'success'
       );
     } catch (err: any) {
@@ -3852,9 +3872,10 @@ export default function App() {
       await api.deleteProduct(skuId);
       const freshProducts = await api.getProducts();
       if (Array.isArray(freshProducts)) setProducts(freshProducts);
+      refreshTrashCount();
       triggerAlert(
-        'SKU Berhasil Dihapus',
-        `Produk "${skuName}" berhasil dihapus dari master katalog.`,
+        'Dipindahkan ke Tempat Sampah',
+        `Produk "${skuName}" dipindahkan ke Tempat Sampah (tersimpan 30 hari).`,
         'success'
       );
     } catch (err) {
@@ -4303,9 +4324,10 @@ export default function App() {
     // Hapus dari SQLite backend
     api.deleteBatch(targetId)
       .then(() => {
+        refreshTrashCount();
         triggerAlert(
-          'Batch Berhasil Dihapus',
-          `Batch "${batchName}" beserta seluruh nomor tag berhasil dihapus.`,
+          'Dipindahkan ke Tempat Sampah',
+          `Batch "${batchName}" beserta seluruh nomor tag dipindahkan ke Tempat Sampah (tersimpan 30 hari).`,
           'success'
         );
       })
@@ -5356,11 +5378,13 @@ export default function App() {
     const NavItem = ({ 
       id, 
       icon: Icon, 
-      label 
+      label,
+      badgeCount
     }: { 
       id: string; 
       icon: any; 
-      label: string; 
+      label: string;
+      badgeCount?: number;
     }) => {
       const isSelected = activeMenu === id;
       const isMin = isSidebarMinimized && !isMobile;
@@ -5379,22 +5403,32 @@ export default function App() {
           }} 
           className={`group flex items-center transition-all ${
             isMin 
-              ? 'justify-center w-9 h-9 min-w-[36px] min-h-[36px] max-w-[36px] max-h-[36px] rounded-full aspect-square mx-auto p-0 shrink-0' 
+              ? 'justify-center w-9 h-9 min-w-[36px] min-h-[36px] max-w-[36px] max-h-[36px] rounded-full aspect-square mx-auto p-0 shrink-0 relative' 
               : 'gap-3 rounded-full w-full px-4 py-2 text-xs sm:text-sm'
           } ${
             isSelected 
               ? 'bg-[#fcf7f3] dark:bg-zinc-800 text-[#c28e62] font-semibold border border-[#c28e62]/30 dark:border-zinc-700' 
               : 'text-slate-600 dark:text-zinc-400 hover:bg-slate-100/80 dark:hover:bg-zinc-800/60 hover:text-slate-900 dark:hover:text-zinc-100 font-medium'
           }`} 
-          {...(isMin ? { 'data-tooltip': label, 'data-tooltip-pos': 'right' } : {})}
+          {...(isMin ? { 'data-tooltip': badgeCount && badgeCount > 0 ? `${label} (${badgeCount})` : label, 'data-tooltip-pos': 'right' } : {})}
         >
           <div className="w-5 h-5 flex items-center justify-center flex-shrink-0 transition-colors">
             <Icon size={18} className={isSelected ? 'text-[#c28e62]' : 'text-slate-400 dark:text-zinc-500 group-hover:text-slate-700 dark:group-hover:text-zinc-300'} />
           </div>
+          {isMin && badgeCount !== undefined && badgeCount > 0 && (
+            <span className="absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-[#c28e62]" />
+          )}
           {!isMin && (
-            <span className="truncate">
-              {label}
-            </span>
+            <div className="flex items-center justify-between gap-2 flex-1 min-w-0">
+              <span className="truncate">
+                {label}
+              </span>
+              {badgeCount !== undefined && badgeCount > 0 && (
+                <span className="px-1.5 py-0.5 text-[10px] font-bold rounded-full bg-slate-100 dark:bg-zinc-800 text-slate-600 dark:text-zinc-300 border border-slate-200 dark:border-zinc-700 tabular-nums shrink-0">
+                  {badgeCount > 99 ? '99+' : badgeCount}
+                </span>
+              )}
+            </div>
           )}
         </a>
       );
@@ -5481,6 +5515,9 @@ export default function App() {
                 icon={canViewUsers ? Users : User}
                 label={canViewUsers ? 'Akun & Hak Akses' : 'Akun'}
               />
+              {canAccessMenu(currentUser?.role, 'trash', rbacMatrix) && (
+                <NavItem id="trash" icon={Trash2} label="Tempat Sampah" badgeCount={trashCount} />
+              )}
               {canAccessMenu(currentUser?.role, 'settings', rbacMatrix) && (
                 <NavItem id="settings" icon={Settings} label="Pengaturan" />
               )}
@@ -5602,6 +5639,13 @@ export default function App() {
           pageTitle: canViewUsers ? 'Kelola Akun & Hak Akses Pengguna' : 'Profil Akun & Keamanan',
           subtitle: canViewUsers ? 'Daftar Pengguna, Pembagian Peran & Profil Akun' : 'Kelola Informasi Akun & Kata Sandi',
           icon: canViewUsers ? Users : User 
+        };
+      case 'trash':
+        return {
+          title: 'Tempat Sampah',
+          pageTitle: 'Tempat Sampah (Pemulihan 30 Hari)',
+          subtitle: 'Pulihkan Item Terhapus atau Hapus Permanen',
+          icon: Trash2
         };
       case 'settings': 
         return { 
@@ -8040,6 +8084,7 @@ export default function App() {
                 })
                 .catch(() => {});
             }}
+            onTrashChanged={refreshTrashCount}
           />
         ) : activeMenu === 'sku' ? (
           renderSkuContent()
@@ -8047,6 +8092,49 @@ export default function App() {
           renderUsersContent()
         ) : activeMenu === 'scan' ? (
           renderScanContent()
+        ) : activeMenu === 'trash' ? (
+          <TrashManager
+            onAlert={triggerAlert}
+            onCountChanged={(cnt) => setTrashCount(cnt)}
+            onRestored={(types: TrashEntityType[]) => {
+              if (types.includes('brand')) {
+                api.getBrands().then((res) => { if (Array.isArray(res)) setBrands(res); }).catch(() => {});
+              }
+              if (types.includes('product')) {
+                api.getProducts().then((res) => { if (Array.isArray(res)) setProducts(res); }).catch(() => {});
+              }
+              if (types.includes('category')) {
+                api.getCategories().then((res) => { if (Array.isArray(res)) setCategories(res); }).catch(() => {});
+              }
+              if (types.includes('batch')) {
+                Promise.all([
+                  api.getBatches().catch(() => null),
+                  api.getAuditLogs().catch(() => null),
+                  api.getDashboardStats().catch(() => null),
+                ]).then(([b, l, s]) => {
+                  if (Array.isArray(b)) setBatches(b);
+                  if (Array.isArray(l)) setAuditLogs(l);
+                  if (s) setDashboardStats(s);
+                });
+              }
+              if (types.includes('user')) {
+                Promise.all([api.getUsers().catch(() => null), api.getBrands().catch(() => null)])
+                  .then(([u, b]) => {
+                    if (Array.isArray(u)) setUsers(u);
+                    if (Array.isArray(b)) setBrands(b);
+                  });
+              }
+              if (types.includes('tag_layout')) {
+                api.getTagLayouts().then((res) => {
+                  if (res && Array.isArray(res.templates)) {
+                    const merged = mergeServerTagTemplates(res.templates);
+                    setTagTemplates(merged);
+                    saveTagTemplates(merged);
+                  }
+                }).catch(() => {});
+              }
+            }}
+          />
         ) : activeMenu === 'settings' ? (
           <SettingsManager onAlert={triggerAlert} isSuperAdmin={canManageSettings} currentUser={currentUser} />
         ) : (
@@ -9768,9 +9856,9 @@ export default function App() {
             <div className="w-12 h-12 rounded-full bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center mx-auto mb-4">
               <Trash2 size={24} />
             </div>
-            <h3 className="text-base font-bold tracking-tight text-slate-800 dark:text-zinc-100 leading-snug mb-2">Hapus Batch Ini?</h3>
+            <h3 className="text-base font-bold tracking-tight text-slate-800 dark:text-zinc-100 leading-snug mb-2">Pindahkan Batch ke Tempat Sampah?</h3>
             <p className="text-xs sm:text-sm text-slate-500 dark:text-zinc-400 mb-6 leading-relaxed">
-              Apakah Anda yakin ingin menghapus data batch ini? Seluruh data Tag, PIN, dan Riwayat Perubahan akan ikut terhapus secara permanen.
+              Batch ini beserta seluruh Tag, PIN, dan Riwayat Perubahannya akan dipindahkan ke <strong>Tempat Sampah</strong> dan dapat dipulihkan dalam 30 hari sebelum dihapus permanen.
             </p>
             <div className="flex gap-3 justify-center items-center">
               <button 
@@ -10861,9 +10949,9 @@ export default function App() {
             <div className="w-12 h-12 rounded-xl bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center mx-auto mb-4">
               <Trash2 size={24} />
             </div>
-            <h3 className="text-base font-bold tracking-tight text-slate-800 dark:text-zinc-100 leading-snug mb-2">Hapus Pengguna Ini?</h3>
+            <h3 className="text-base font-bold tracking-tight text-slate-800 dark:text-zinc-100 leading-snug mb-2">Pindahkan Pengguna ke Tempat Sampah?</h3>
             <p className="text-xs sm:text-sm text-slate-500 dark:text-zinc-400 mb-4 leading-relaxed">
-              Apakah Anda yakin ingin menghapus akun pengguna <strong>{userToDelete.name}</strong> ({userToDelete.email})?
+              Akun <strong>{userToDelete.name}</strong> ({userToDelete.email}) akan dinonaktifkan dan dipindahkan ke <strong>Tempat Sampah</strong> selama 30 hari sebelum dihapus permanen.
             </p>
             {(() => {
               const ownedCount = brands.filter(b => b.ownerId === userToDelete.id).length;
@@ -12179,7 +12267,7 @@ export default function App() {
               <Trash2 size={24} />
             </div>
             <h3 className="text-base font-bold tracking-tight text-slate-800 dark:text-zinc-100 leading-snug mb-2">
-              Hapus Brand {brandToDelete.name}?
+              Pindahkan Brand {brandToDelete.name} ke Tempat Sampah?
             </h3>
             
             {(() => {
@@ -12187,7 +12275,7 @@ export default function App() {
               return (
                 <div>
                   <p className="text-xs sm:text-sm text-slate-500 dark:text-zinc-400 mb-4 leading-relaxed">
-                    Apakah Anda yakin ingin menghapus data brand ini? Tindakan ini akan menghapus katalog merk dari master sistem.
+                    Brand ini akan dipindahkan ke <strong>Tempat Sampah</strong> dan dapat dipulihkan dalam 30 hari sebelum dihapus permanen.
                   </p>
                   {batchCount > 0 && (
                     <div className="mb-4 p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-900/50 text-xs text-left leading-relaxed">
@@ -13016,10 +13104,10 @@ export default function App() {
               <Trash2 size={24} />
             </div>
             <h3 className="text-base font-bold tracking-tight text-slate-800 dark:text-zinc-100 leading-snug mb-2">
-              Hapus SKU Produk?
+              Pindahkan SKU ke Tempat Sampah?
             </h3>
             <p className="text-xs sm:text-sm text-slate-500 dark:text-zinc-400 mb-4 leading-relaxed">
-              Anda akan menghapus SKU <span className="font-semibold text-slate-700 dark:text-zinc-200">"{skuToDelete.sku}"</span> ({skuToDelete.brandName}) dari master katalog.
+              SKU <span className="font-semibold text-slate-700 dark:text-zinc-200">"{skuToDelete.sku}"</span> ({skuToDelete.brandName}) akan dipindahkan ke <strong>Tempat Sampah</strong> dan dapat dipulihkan dalam 30 hari sebelum dihapus permanen.
             </p>
 
             {(() => {

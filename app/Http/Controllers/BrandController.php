@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Services\RbacService;
 use App\Services\SecurityHardeningService;
+use App\Services\TrashService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -196,7 +197,24 @@ class BrandController extends Controller
             return $denied;
         }
 
-        DB::table('brands')->where('id', $decodedId)->delete();
-        return response()->json(['success' => true]);
+        $authUser = $this->authUser($request);
+        $trashId = null;
+        DB::transaction(function () use ($decodedId, $existing, $authUser, $request, &$trashId) {
+            $trashId = TrashService::moveToTrash([
+                'entityType' => 'brand',
+                'entityId' => (string) $existing->id,
+                'title' => (string) ($existing->name ?: $existing->id),
+                'subtitle' => ($existing->businessType ?? 'Retail') . ' · ' . ($existing->status ?? 'Aktif'),
+                'brandName' => (string) $existing->name,
+                'brandId' => (string) $existing->id,
+                'deletedById' => $authUser['id'] ?? null,
+                'deletedByName' => $this->actorLabel($request),
+                'itemCount' => 1,
+                'payload' => ['brand' => (array) $existing],
+            ]);
+            DB::table('brands')->where('id', $decodedId)->delete();
+        });
+
+        return response()->json(['success' => true, 'trashed' => true, 'trashId' => $trashId]);
     }
 }

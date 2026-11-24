@@ -38,9 +38,10 @@ interface CategoryManagerProps {
   onAlert?: (title: string, message: string, type?: 'success' | 'warning' | 'error' | 'info') => void;
   onCategoriesUpdated?: (cats: CategoryItem[]) => void;
   onCategoryRenamed?: () => void;
+  onTrashChanged?: () => void;
 }
 
-export const CategoryManager: React.FC<CategoryManagerProps> = ({ currentRole = 'Super Admin', canManage, onAlert, onCategoriesUpdated, onCategoryRenamed }) => {
+export const CategoryManager: React.FC<CategoryManagerProps> = ({ currentRole = 'Super Admin', canManage, onAlert, onCategoriesUpdated, onCategoryRenamed, onTrashChanged }) => {
   const canEditCategories = canManage !== undefined ? canManage : currentRole === 'Super Admin';
   const [categories, setCategories] = useState<CategoryItem[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -381,10 +382,11 @@ export const CategoryManager: React.FC<CategoryManagerProps> = ({ currentRole = 
         setCategories(nextCats);
         onCategoriesUpdated?.(nextCats);
         setDeleteModalOpen(false);
+        onTrashChanged?.();
 
         showAlert(
-          'Kategori Dihapus',
-          `"${categoryToDelete.name}" telah dihapus`,
+          'Dipindahkan ke Tempat Sampah',
+          `"${categoryToDelete.name}" dipindahkan ke Tempat Sampah (tersimpan 30 hari).`,
           'success'
         );
 
@@ -999,11 +1001,11 @@ export const CategoryManager: React.FC<CategoryManagerProps> = ({ currentRole = 
               <Trash2 size={24} />
             </div>
             <h3 className="text-base font-bold tracking-tight text-slate-800 dark:text-zinc-100 leading-snug mb-2">
-              Hapus {getLevelLabel(categoryToDelete.level)}?
+              Pindahkan ke Tempat Sampah?
             </h3>
             <p className="text-xs sm:text-sm text-slate-500 dark:text-zinc-400 mb-6 leading-relaxed">
-              Apakah Anda yakin ingin menghapus <strong>"{categoryToDelete.name}"</strong>?
-              {categoryToDelete.level < 3 && ' Seluruh sub-kategori di bawahnya juga akan ikut terhapus.'}
+              <strong>"{categoryToDelete.name}"</strong>
+              {categoryToDelete.level < 3 && ' beserta seluruh sub-kategori di bawahnya'} akan dipindahkan ke Tempat Sampah selama 30 hari sebelum dihapus permanen.
             </p>
 
             <div className="flex gap-2.5 justify-center items-center">

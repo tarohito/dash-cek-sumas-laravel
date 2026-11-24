@@ -180,6 +180,7 @@ export type AppMenuId =
   | 'tag-qr'
   | 'scan'
   | 'users'
+  | 'trash'
   | 'settings';
 
 export function canAccessMenu(
@@ -202,6 +203,16 @@ export function canAccessMenu(
       return hasPermission(role, 'scans.view', matrix);
     case 'users':
       return true;
+    case 'trash':
+      return (
+        hasPermission(role, 'brands.manage', matrix) ||
+        hasPermission(role, 'categories.manage', matrix) ||
+        hasPermission(role, 'sku.manage', matrix) ||
+        hasPermission(role, 'batches.delete', matrix) ||
+        hasPermission(role, 'batches.layout_edit', matrix) ||
+        hasPermission(role, 'users.manage', matrix) ||
+        hasPermission(role, 'settings.manage', matrix)
+      );
     case 'settings':
       return hasPermission(role, 'settings.view', matrix) || hasPermission(role, 'settings.manage', matrix);
     default:

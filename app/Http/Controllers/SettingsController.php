@@ -155,6 +155,9 @@ class SettingsController extends Controller
         $passwordResetRequests = DB::table('password_reset_requests')->get()->map(fn ($r) => (array) $r)->all();
         $readNotifications = DB::table('read_notifications')->get()->map(fn ($r) => (array) $r)->all();
         $systemSettings = DB::table('system_settings')->get()->map(fn ($r) => (array) $r)->all();
+        $trashItems = \Illuminate\Support\Facades\Schema::hasTable('trash_items')
+            ? DB::table('trash_items')->get()->map(fn ($r) => (array) $r)->all()
+            : [];
         $settingsRow = DB::table('system_settings')->where('key', 'app_settings')->first(['value']);
 
         try {
@@ -228,6 +231,7 @@ class SettingsController extends Controller
                 $insertBlocks('read_notifications', ['userId', 'notificationId', 'readAt'], $readNotifications),
                 $insertBlocks('categories', ['id', 'name', 'parentId', 'level', 'createdAt', 'specSchema'], $categories),
                 $insertBlocks('system_settings', ['key', 'value', 'updatedAt'], $systemSettings),
+                $insertBlocks('trash_items', ['id', 'entityType', 'entityId', 'title', 'subtitle', 'brandName', 'brandId', 'deletedById', 'deletedByName', 'deletedAt', 'deletedAtTs', 'expiresAtTs', 'itemCount', 'payload'], $trashItems),
                 "SET FOREIGN_KEY_CHECKS = 1;",
             ]);
 
@@ -259,6 +263,7 @@ class SettingsController extends Controller
                 'totalProducts' => count($products),
                 'totalUsers' => count($users),
                 'totalAuditLogs' => count($auditLogs),
+                'totalTrashItems' => count($trashItems),
             ],
             'data' => [
                 'batches' => $batches,
@@ -272,6 +277,7 @@ class SettingsController extends Controller
                 'auditLogs' => $auditLogs,
                 'passwordResetRequests' => $passwordResetRequests,
                 'readNotifications' => $readNotifications,
+                'trashItems' => $trashItems,
                 'settings' => ($settingsRow && !empty($settingsRow->value))
                     ? (json_decode((string) $settingsRow->value, true) ?: SecurityPolicyService::defaultSystemSettings())
                     : SecurityPolicyService::defaultSystemSettings(),
@@ -486,6 +492,36 @@ class SettingsController extends Controller
                 }
                 foreach (array_chunk($rows, 200) as $chunk) {
                     DB::table('audit_logs')->insert($chunk);
+                }
+            }
+
+            if (is_array($data['trashItems'] ?? null) && \Illuminate\Support\Facades\Schema::hasTable('trash_items')) {
+                DB::table('trash_items')->delete();
+                $rows = [];
+                foreach ($data['trashItems'] as $t) {
+                    if (empty($t['id']) || empty($t['entityType']) || empty($t['entityId'])) {
+                        continue;
+                    }
+                    $payloadRaw = is_string($t['payload'] ?? null) ? $t['payload'] : json_encode($t['payload'] ?? []);
+                    $rows[] = [
+                        'id' => $t['id'],
+                        'entityType' => $t['entityType'],
+                        'entityId' => $t['entityId'],
+                        'title' => $t['title'] ?? $t['entityId'],
+                        'subtitle' => $t['subtitle'] ?? null,
+                        'brandName' => $t['brandName'] ?? null,
+                        'brandId' => $t['brandId'] ?? null,
+                        'deletedById' => $t['deletedById'] ?? null,
+                        'deletedByName' => $t['deletedByName'] ?? 'Sistem',
+                        'deletedAt' => $t['deletedAt'] ?? gmdate('Y-m-d\TH:i:s\Z'),
+                        'deletedAtTs' => (int) ($t['deletedAtTs'] ?? round(microtime(true) * 1000)),
+                        'expiresAtTs' => (int) ($t['expiresAtTs'] ?? (round(microtime(true) * 1000) + \App\Services\TrashService::RETENTION_MS)),
+                        'itemCount' => max(1, (int) ($t['itemCount'] ?? 1)),
+                        'payload' => $payloadRaw,
+                    ];
+                }
+                foreach (array_chunk($rows, 100) as $chunk) {
+                    DB::table('trash_items')->insert($chunk);
                 }
             }
 

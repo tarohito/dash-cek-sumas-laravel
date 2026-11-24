@@ -6,6 +6,7 @@ use App\Services\NotificationService;
 use App\Services\RbacService;
 use App\Services\SecurityHardeningService;
 use App\Services\SessionAuthService;
+use App\Services\TrashService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -297,13 +298,33 @@ class UserController extends Controller
         }
 
         SessionAuthService::revokeAllUserSessions($decodedId);
-        DB::table('users')->where('id', $decodedId)->delete();
 
-        $fallbackUser = DB::table('users')->orderBy('id')->first(['id']);
-        if ($fallbackUser) {
-            DB::table('brands')->where('ownerId', $decodedId)->update(['ownerId' => $fallbackUser->id]);
-        }
+        $trashId = null;
+        DB::transaction(function () use ($decodedId, $existing, $authUser, $request, &$trashId) {
+            $linkedBrandIds = DB::table('brands')->where('ownerId', $decodedId)->pluck('id')->all();
 
-        return response()->json(['success' => true]);
+            $trashId = TrashService::moveToTrash([
+                'entityType' => 'user',
+                'entityId' => (string) $existing->id,
+                'title' => (string) ($existing->name ?: $existing->email),
+                'subtitle' => trim(($existing->role ?? 'Admin Brand') . ' · ' . ($existing->email ?? '')),
+                'deletedById' => $authUser['id'] ?? null,
+                'deletedByName' => $this->actorLabel($request),
+                'itemCount' => 1,
+                'payload' => [
+                    'user' => (array) $existing,
+                    'linkedBrandIds' => $linkedBrandIds,
+                ],
+            ]);
+
+            DB::table('users')->where('id', $decodedId)->delete();
+
+            $fallbackUser = DB::table('users')->orderBy('id')->first(['id']);
+            if ($fallbackUser) {
+                DB::table('brands')->where('ownerId', $decodedId)->update(['ownerId' => $fallbackUser->id]);
+            }
+        });
+
+        return response()->json(['success' => true, 'trashed' => true, 'trashId' => $trashId]);
     }
 }

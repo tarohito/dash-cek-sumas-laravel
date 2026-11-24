@@ -14,6 +14,7 @@ use App\Http\Controllers\RbacController;
 use App\Http\Controllers\ScanController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\TagLayoutController;
+use App\Http\Controllers\TrashController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
 
@@ -97,6 +98,14 @@ Route::middleware('throttle:api-global')->group(function () {
         Route::post('/settings/test-alert', [SettingsController::class, 'testAlert'])->middleware('throttle:heavy-ops');
         Route::get('/settings/backup', [SettingsController::class, 'backup'])->middleware('throttle:heavy-ops');
         Route::post('/settings/restore', [SettingsController::class, 'restore'])->middleware('throttle:heavy-ops');
+
+        Route::get('/trash', [TrashController::class, 'index']);
+        Route::get('/trash/count', [TrashController::class, 'count']);
+        Route::post('/trash/bulk-restore', [TrashController::class, 'bulkRestore']);
+        Route::post('/trash/bulk-delete', [TrashController::class, 'bulkDestroy']);
+        Route::post('/trash/{id}/restore', [TrashController::class, 'restore']);
+        Route::delete('/trash/{id}', [TrashController::class, 'destroy']);
+        Route::delete('/trash', [TrashController::class, 'emptyTrash']);
     });
 
     Route::fallback(function () {

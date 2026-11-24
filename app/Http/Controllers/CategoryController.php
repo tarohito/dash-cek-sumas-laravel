@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\SecurityHardeningService;
+use App\Services\TrashService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -176,19 +177,52 @@ class CategoryController extends Controller
         }
 
         $deletedIds = [$decodedId];
-        DB::transaction(function () use ($decodedId, &$deletedIds) {
-            $childrenL2 = DB::table('categories')->where('parentId', $decodedId)->pluck('id')->all();
-            if (count($childrenL2) > 0) {
-                $childrenL3 = DB::table('categories')->whereIn('parentId', $childrenL2)->pluck('id')->all();
-                $deletedIds = array_values(array_unique(array_merge($deletedIds, $childrenL2, $childrenL3)));
-                if (count($childrenL3) > 0) {
-                    DB::table('categories')->whereIn('id', $childrenL3)->delete();
+        $authUser = $this->authUser($request);
+        $trashId = null;
+        DB::transaction(function () use ($decodedId, $existing, $authUser, $request, &$deletedIds, &$trashId) {
+            $items = [(array) $existing];
+            $childrenL2 = DB::table('categories')->where('parentId', $decodedId)->get();
+            $childrenL2Ids = $childrenL2->pluck('id')->all();
+            foreach ($childrenL2 as $row) {
+                $items[] = (array) $row;
+            }
+            if (count($childrenL2Ids) > 0) {
+                $childrenL3 = DB::table('categories')->whereIn('parentId', $childrenL2Ids)->get();
+                $childrenL3Ids = $childrenL3->pluck('id')->all();
+                foreach ($childrenL3 as $row) {
+                    $items[] = (array) $row;
                 }
-                DB::table('categories')->whereIn('id', $childrenL2)->delete();
+                $deletedIds = array_values(array_unique(array_merge($deletedIds, $childrenL2Ids, $childrenL3Ids)));
+                if (count($childrenL3Ids) > 0) {
+                    DB::table('categories')->whereIn('id', $childrenL3Ids)->delete();
+                }
+                DB::table('categories')->whereIn('id', $childrenL2Ids)->delete();
             }
             DB::table('categories')->where('id', $decodedId)->delete();
+
+            $levelLabel = match ((int) ($existing->level ?? 1)) {
+                1 => 'Kategori Utama',
+                2 => 'Sub Kategori',
+                default => 'Varian / Jenis',
+            };
+            $subCount = max(0, count($items) - 1);
+            $subtitle = $subCount > 0 ? "{$levelLabel} (+{$subCount} sub-kategori)" : $levelLabel;
+
+            $trashId = TrashService::moveToTrash([
+                'entityType' => 'category',
+                'entityId' => (string) $existing->id,
+                'title' => (string) ($existing->name ?: $existing->id),
+                'subtitle' => $subtitle,
+                'deletedById' => $authUser['id'] ?? null,
+                'deletedByName' => $this->actorLabel($request),
+                'itemCount' => count($items),
+                'payload' => [
+                    'root' => (array) $existing,
+                    'items' => $items,
+                ],
+            ]);
         });
 
-        return response()->json(['success' => true, 'deletedIds' => $deletedIds]);
+        return response()->json(['success' => true, 'trashed' => true, 'trashId' => $trashId, 'deletedIds' => $deletedIds]);
     }
 }

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Services\NotificationService;
 use App\Services\RbacService;
 use App\Services\SecurityHardeningService;
+use App\Services\TrashService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -418,10 +419,35 @@ class TagLayoutController extends Controller
         }
 
         $templates = $this->loadStoredTemplates();
-        $remaining = array_values(array_filter($templates, static fn ($t) => ($t['id'] ?? '') !== $cleanId));
-        if (count($remaining) === count($templates)) {
+        $removedTemplate = null;
+        $remaining = [];
+        foreach ($templates as $t) {
+            if (($t['id'] ?? '') === $cleanId) {
+                $removedTemplate = $t;
+            } else {
+                $remaining[] = $t;
+            }
+        }
+        if ($removedTemplate === null) {
             return response()->json(['success' => false, 'error' => 'Template tidak ditemukan.'], 404);
         }
+
+        $authUser = $this->authUser($request);
+        $trashId = TrashService::moveToTrash([
+            'entityType' => 'tag_layout',
+            'entityId' => $cleanId,
+            'title' => (string) ($removedTemplate['name'] ?? $cleanId),
+            'subtitle' => sprintf(
+                '%s×%s mm · Kertas %s',
+                $removedTemplate['sticker']['widthMm'] ?? '-',
+                $removedTemplate['sticker']['heightMm'] ?? '-',
+                $removedTemplate['sheet']['preset'] ?? 'Custom'
+            ),
+            'deletedById' => $authUser['id'] ?? null,
+            'deletedByName' => $this->actorLabel($request),
+            'itemCount' => 1,
+            'payload' => ['template' => $removedTemplate],
+        ]);
 
         $nowStr = RbacService::formatIndonesianTimestamp();
         DB::table('system_settings')->updateOrInsert(
@@ -440,6 +466,8 @@ class TagLayoutController extends Controller
 
         return response()->json([
             'success' => true,
+            'trashed' => true,
+            'trashId' => $trashId,
             'templates' => $remaining,
             'activeTemplateId' => $activeId,
         ]);

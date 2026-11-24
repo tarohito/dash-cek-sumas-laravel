@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Services\NotificationService;
 use App\Services\RbacService;
 use App\Services\SecurityHardeningService;
+use App\Services\TrashService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -679,12 +680,33 @@ class BatchController extends Controller
             return $denied;
         }
 
-        DB::transaction(function () use ($decodedId, $existing) {
+        $authUser = $this->authUser($request);
+        $trashId = null;
+        DB::transaction(function () use ($decodedId, $existing, $authUser, $request, &$trashId) {
+            $tags = DB::table('tags')->where('batchId', $decodedId)->get()->map(fn ($r) => (array) $r)->all();
+            $auditLogs = DB::table('audit_logs')->where('batchId', $existing->batchId)->get()->map(fn ($r) => (array) $r)->all();
+
+            $trashId = TrashService::moveToTrash([
+                'entityType' => 'batch',
+                'entityId' => (string) $existing->id,
+                'title' => (string) ($existing->batchId ?: $existing->id),
+                'subtitle' => trim(($existing->sku ?? '') . ' · ' . number_format((int) ($existing->qty ?? count($tags)), 0, ',', '.') . ' Tag'),
+                'brandName' => $existing->brand ?? null,
+                'deletedById' => $authUser['id'] ?? null,
+                'deletedByName' => $this->actorLabel($request),
+                'itemCount' => 1 + count($tags),
+                'payload' => [
+                    'batch' => (array) $existing,
+                    'tags' => $tags,
+                    'auditLogs' => $auditLogs,
+                ],
+            ]);
+
             DB::table('batches')->where('id', $decodedId)->delete();
             DB::table('tags')->where('batchId', $decodedId)->delete();
             DB::table('audit_logs')->where('batchId', $existing->batchId)->delete();
         });
 
-        return response()->json(['success' => true]);
+        return response()->json(['success' => true, 'trashed' => true, 'trashId' => $trashId]);
     }
 }
