@@ -17,14 +17,17 @@ Sistem monitoring keaslian produk berbasis QR Code, manajemen batch & tag fisik,
 - **Telemetri QR & Deteksi Anomali Lokasi**
   - Verifikasi publik `/q/{tagNumber}` dengan dukungan mode validasi GPS `flexible`, `hybrid`, dan `strict`.
   - Deteksi anomali otomatis: jarak Haversine, *Impossible Travel Velocity* (`maxVelocityKmh`), ambang batas scan sah/waspada/palsu, cooldown deduplikasi, deteksi mock location, dan pembatasan koordinat wilayah Indonesia.
-  - Peta sebaran lokasi pemindaian interaktif menggunakan **Leaflet** & OpenStreetMap serta grafik tren aktivitas (`7d`, `30d`, `12m`) menggunakan **Recharts**.
-- **Tag Layout Studio & Ekspor Dokumen**
-  - Editor visual layout stiker QR & PIN berbasis satuan milimeter (`mm`) dengan 3 preset bawaan (`builtin-sumas-25x60`, `builtin-compact-30x40`, `builtin-seal-50x22`) serta dukungan template kustom (`TagLayoutController`).
-  - Ekspor massal stiker QR Code ke PDF menggunakan **jsPDF** dan **qrcode**.
-- **Manajemen Master Data & Notifikasi Real-Time**
-  - **Brand/Merk**: CRUD brand dengan foto/logo rasio `1:1` atau fallback avatar inisial dengan warna acak deterministik (tanpa field kategori pada level brand).
-  - **Kategori Bertingkat**: Hierarki Level 1–3 dengan skema spesifikasi dinamis; perubahan/rename kategori otomatis tersinkronisasi ke kolom `category` SKU produk terkait.
-  - **Produk (SKU), Batch & Tag**: CRUD SKU (`products.category` mendukung path bertingkat hingga 400 karakter), pembuatan batch & ribuan tag fisik, alokasi proyek B2B, pengaturan redirect URL, suspend batch/tag, audit log, serta backup & restore penuh JSON/SQL.
+  - Peta sebaran lokasi pemindaian interaktif menggunakan **Leaflet** & OpenStreetMap serta grafik tren aktivitas (`7d`, `30d`, `12m`) teragregasi dinamis dari database menggunakan **Recharts**.
+- **Tag Layout Studio & Ekspor PDF Vektor**
+  - Editor visual layout stiker QR & PIN berbasis satuan milimeter (`mm`) dengan 3 preset bawaan (`builtin-sumas-25x60`, `builtin-compact-30x40`, `builtin-seal-50x22`), template kustom tersinkron ke server (`TagLayoutController`), serta dukungan *multi-select* (marquee drag, `Shift/Ctrl+Klik`, `Ctrl+A`, bulk align/nudge/duplicate/delete/z-index).
+  - Kontrol tipografi lengkap: font (`Kode Mono`, `Sans / Helvetica`, `Serif / Times`), ukuran (`2–300 pt`), ketebalan (`Bold` / `Normal`), **kerenggangan teks / tracking (`pt`)**, perataan (`Kiri` / `Tengah` / `Kanan`) presisi pada sudut rotasi berapa pun, serta token dinamis (`{brand}`, `{sku}`, `{batchId}`, `{tagNumber}`, `{pin}`).
+  - Kontrol bentuk & die-cut: rotasi kotak/rounded-rect vektor (kurva Bezier), mode *outline-only* (isi transparan), ketebalan & warna garis potong die-cut (`mm`).
+  - Ekspor massal stiker ke PDF menggunakan **jsPDF** dan **qrcode**, dengan **QR Code dirender sebagai compound vector path murni** (bukan bitmap/PNG) sehingga tetap tajam dan dapat diedit bebas di Adobe Illustrator / CorelDRAW.
+- **PIN Alfanumerik CSPRNG & Manajemen Master Data**
+  - **Keamanan PIN**: Seluruh batch baru menggunakan PIN kombinasi **huruf kapital & angka anti-ambiguitas** (`ABCDEFGHJKLMNPQRSTUVWXYZ23456789`, mengecualikan `0`, `O`, `1`, `I`) yang diacak dengan OS CSPRNG (`random_int`), panjang fleksibel **4–8 digit** (default `8 digit`), validasi penolakan pola lemah/berurutan, serta pengecekan anti-duplikasi di level batch & database.
+  - **Brand/Merk & Kategori Bertingkat**: CRUD brand dengan foto/logo `1:1` atau avatar inisial deterministik, hierarki kategori Level 1–3 dengan spesifikasi dinamis, serta sinkronisasi otomatis perubahan nama Brand/Kategori/SKU ke batch, produk, titik scan, dan Tempat Sampah.
+  - **Produk (SKU), Batch & Tag**: CRUD SKU (`products.category` hingga 400 karakter), pembuatan batch & ribuan tag fisik, alokasi proyek B2B, pengaturan redirect URL, suspend batch/tag, audit log, serta backup & restore penuh JSON/SQL.
+  - **Tempat Sampah (Trash Manager)**: Penghapusan aman berbasis soft-delete (`trash_items`) untuk Brand, Kategori, SKU, Batch, User, dan Tag Layout dengan pemulihan (*restore*), hapus permanen (satuan/massal/kosongkan), serta pembersihan otomatis item kedaluwarsa (> 30 hari). Item di Tempat Sampah otomatis dikecualikan dari statistik dashboard, daftar SKU aktif, dan peta scan.
   - **Notifikasi Real-Time**: Pembaruan streaming via **Server-Sent Events (SSE)** pada `/api/notifications/stream` yang terisolasi sesuai peran dan cakupan brand.
 - **Font Self-Hosted (Tanpa CDN Eksternal)**
   - Seluruh font UI (`Plus Jakarta Sans` weight `400`, `500`, `600`, `700`, `800` dan `Kode Mono` weight `400`, `600`, `700`) dikemas langsung ke dalam bundle Vite melalui `@fontsource/plus-jakarta-sans` dan `@fontsource/kode-mono`, ditambah `public/fonts/KodeMono-Bold.ttf` untuk generator PDF, sehingga tampilan tetap konsisten tanpa bergantung pada Google Fonts CDN.
@@ -39,7 +42,7 @@ Sistem monitoring keaslian produk berbasis QR Code, manajemen batch & tag fisik,
 | Frontend | React 19, TypeScript 7, Vite 7, Tailwind CSS v4 |
 | Font Lokal | `@fontsource/plus-jakarta-sans`, `@fontsource/kode-mono`, `KodeMono-Bold.ttf` |
 | Peta & Grafik | Leaflet, Recharts |
-| Dokumen & UI | jsPDF, qrcode, Lucide React, Motion |
+| Dokumen & UI | jsPDF, qrcode (vector path PDF), Lucide React, Motion |
 | Database | MySQL 8.0+ / MariaDB 10.6+ (produksi); PostgreSQL / SQLite didukung untuk container & pengujian |
 
 **Ekstensi PHP yang dibutuhkan:** `pdo_mysql`, `mbstring`, `openssl`, `xml`, `dom`, `tokenizer`, `fileinfo`, `ctype`, `json`, `bcmath`, `zip` (tambahkan `pdo_pgsql` atau `pdo_sqlite` jika menggunakan PostgreSQL/SQLite).  
@@ -53,14 +56,14 @@ Sistem monitoring keaslian produk berbasis QR Code, manajemen batch & tag fisik,
 .
 ├── app/
 │   ├── Http/
-│   │   ├── Controllers/      # Controller REST API, verifikasi QR publik, Tag Layout, & SPA entry
+│   │   ├── Controllers/      # Controller REST API (Batch, Brand, Product, Category, Scan, Trash, TagLayout, dll.)
 │   │   └── Middleware/       # Sanitasi input API, security headers, & autentikasi sesi + CSRF
 │   ├── Providers/            # Konfigurasi rate limiter, HTTPS forcing, & service provider
-│   └── Services/             # Kebijakan keamanan QR/GPS, RBAC, sesi, notifikasi, & hardening
+│   └── Services/             # Kebijakan keamanan QR/GPS, RBAC, sesi, notifikasi, TrashService, & hardening
 ├── bootstrap/app.php         # Registrasi routing, middleware, trusted proxies, & cookie encryption
 ├── config/                   # Konfigurasi Laravel (database, cors, session, cache, dll.)
 ├── database/
-│   ├── migrations/           # Skema 15 tabel Sumas + migrasi penyesuaian brands & products
+│   ├── migrations/           # Skema 16 tabel Sumas (termasuk trash_items) + migrasi penyesuaian
 │   └── seeders/              # SumasSeeder & dataset awal database/seeders/data/sumas_seed.json
 ├── docker/                   # Konfigurasi Apache, mpm_prefork, & entrypoint container produksi
 ├── public/
@@ -85,11 +88,12 @@ Daftar file migrasi aplikasi:
   `batches`, `tags`, `scan_points`, `scan_activities`, `audit_logs`, `users`, `brands`, `products`, `password_reset_requests`, `notifications`, `read_notifications`, `categories`, `system_settings`, `server_secrets`, `user_sessions`.
 - [`2026_11_24_000001_drop_category_from_brands_table.php`](database/migrations/2026_11_24_000001_drop_category_from_brands_table.php) — Menghapus kolom `category` dari tabel `brands`.
 - [`2026_11_24_000002_expand_category_length_on_products_table.php`](database/migrations/2026_11_24_000002_expand_category_length_on_products_table.php) — Memperluas panjang kolom `products.category` menjadi `400` karakter untuk path kategori bertingkat.
+- [`2026_11_24_000003_create_trash_items_table.php`](database/migrations/2026_11_24_000003_create_trash_items_table.php) — Menyiapkan tabel `trash_items` untuk fitur Tempat Sampah (soft-delete + retensi 30 hari).
 
 [`SumasSeeder`](database/seeders/SumasSeeder.php) mengisi dataset konsisten dari `database/seeders/data/sumas_seed.json`:
 - `3` akun pengguna dengan hash **bcrypt**
-- `7` batch produksi dengan total **1.270 tag real** sesuai `qty` masing-masing batch
-- `10` titik pemindaian & `24` agregasi aktivitas (`7d`, `30d`, `12m`)
+- `7` batch produksi dengan total **1.270 tag aktif** menggunakan **PIN alfanumerik CSPRNG** (kombinasi huruf & angka)
+- `10` titik pemindaian (tersinkron dengan PIN & tag aktif) & `24` data agregasi aktivitas (`7d`, `30d`, `12m`)
 - `15` brand, `15` produk SKU, `17` kategori, `7` audit log, dan `2` konfigurasi sistem
 
 ### Akun Bawaan (Seeder)
@@ -235,8 +239,9 @@ docker run -p 10000:10000 -e APP_KEY="base64:..." -e APP_URL="https://domainanda
 - **Dashboard, Profil & Telemetri (Terautentikasi):**
   - `GET /api/auth/check-username`, `PUT /api/auth/profile`
   - `GET /api/dashboard/stats`, `GET /api/scans/locations`, `GET /api/scans/stats`, `GET /api/scans/activity`
-- **Manajemen Data, Tag Layout & Sistem (Terautentikasi + RBAC):**
-  - `/api/batches/*` — Pembuatan batch, daftar tag terpaginasi, seluruh tag (`all-tags`), ringkasan, alokasi/dealokasi proyek B2B, redirect URL, edit, & hapus batch
+- **Manajemen Data, Tag Layout, Tempat Sampah & Sistem (Terautentikasi + RBAC):**
+  - `/api/batches/*` — Pembuatan batch (PIN alfanumerik CSPRNG 4–8 digit), daftar tag terpaginasi, seluruh tag (`all-tags`), ringkasan, alokasi/dealokasi proyek B2B, redirect URL, edit, & hapus batch
   - `/api/tag-layouts*` — Daftar preset/template layout stiker, simpan/ubah template, aktivasi template default, & hapus template kustom
+  - `/api/trash*` — Daftar Tempat Sampah, `count`, `restore`, `bulk-restore`, `bulk-delete`, hapus permanen, & `empty`
   - `/api/brands/*`, `/api/categories/*` (termasuk `/specs`), `/api/products/*` (termasuk `/relational`), `/api/users/*`, `/api/audit-logs`, `/api/password-resets/*`
   - `/api/rbac/permissions`, `/api/notifications/*` (termasuk SSE `/stream` dan `mark-read`), `/api/settings/*` (termasuk `test-alert`, `backup`, & `restore`)
