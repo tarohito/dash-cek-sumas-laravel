@@ -18,14 +18,6 @@ class DashboardController extends Controller
         $scope = $this->brandScope($request);
         $isGlobal = !empty($scope['isGlobal']);
 
-        $allBatches = DB::table('batches')->orderByDesc('date')->orderByDesc('id')->get();
-        $scopedBatches = [];
-        foreach ($allBatches as $b) {
-            if ($isGlobal || RbacService::canScopeAccessBrand($scope, $b->brand ?? null)) {
-                $scopedBatches[] = (array) $b;
-            }
-        }
-
         $allBrands = DB::table('brands')->select(['id', 'name', 'status'])->get();
         $activeBrandIdSet = [];
         $activeBrandNameSet = [];
@@ -38,6 +30,23 @@ class DashboardController extends Controller
             }
             if ($isGlobal || RbacService::canScopeAccessBrand($scope, $br->name ?? null, $br->id ?? null)) {
                 $scopedBrands[] = (array) $br;
+            }
+        }
+
+        $allBatches = DB::table('batches')->orderByDesc('date')->orderByDesc('id')->get();
+        $activeBatchCodeSet = [];
+        $scopedBatches = [];
+        foreach ($allBatches as $b) {
+            $bBrandLower = strtolower(trim((string) ($b->brand ?? '')));
+            if ($bBrandLower === '' || !isset($activeBrandNameSet[$bBrandLower])) {
+                continue;
+            }
+            $bCodeLower = strtolower(trim((string) ($b->batchId ?? '')));
+            if ($bCodeLower !== '') {
+                $activeBatchCodeSet[$bCodeLower] = true;
+            }
+            if ($isGlobal || RbacService::canScopeAccessBrand($scope, $b->brand ?? null)) {
+                $scopedBatches[] = (array) $b;
             }
         }
 
@@ -54,9 +63,17 @@ class DashboardController extends Controller
             }
         }
 
-        $allScans = DB::table('scan_points')->select(['city', 'brand', 'totalScans', 'todayScans', 'status'])->get();
+        $allScans = DB::table('scan_points')->select(['city', 'brand', 'batchId', 'totalScans', 'todayScans', 'status'])->get();
         $scopedScans = [];
         foreach ($allScans as $s) {
+            $sBrandLower = strtolower(trim((string) ($s->brand ?? '')));
+            $sBatchLower = strtolower(trim((string) ($s->batchId ?? '')));
+            if ($sBrandLower === '' || !isset($activeBrandNameSet[$sBrandLower])) {
+                continue;
+            }
+            if ($sBatchLower !== '' && !isset($activeBatchCodeSet[$sBatchLower])) {
+                continue;
+            }
             if ($isGlobal || RbacService::canScopeAccessBrand($scope, $s->brand ?? null)) {
                 $scopedScans[] = (array) $s;
             }

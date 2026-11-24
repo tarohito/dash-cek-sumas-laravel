@@ -1158,59 +1158,11 @@ export default function App() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [lastSyncTime, setLastSyncTime] = useState<string>(() => new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
 
-  const [batches, setBatches] = useState<any[]>(() => {
-    try {
-      const savedBatches = localStorage.getItem('sumas_batches') || localStorage.getItem('mki_batches');
-      return savedBatches ? JSON.parse(savedBatches) : [];
-    } catch (e) {
-      return [];
-    }
-  });
-
-  const [auditLogs, setAuditLogs] = useState<any[]>(() => {
-    try {
-      const savedLogs = localStorage.getItem('sumas_auditLogs') || localStorage.getItem('mki_auditLogs');
-      return savedLogs ? JSON.parse(savedLogs) : [];
-    } catch (e) {
-      return [];
-    }
-  });
-
-  const [brands, setBrands] = useState<BrandItem[]>(() => {
-    try {
-      const savedBrands = localStorage.getItem('sumas_brands') || localStorage.getItem('mki_brands');
-      if (savedBrands) {
-        const parsed = JSON.parse(savedBrands);
-        return parsed.map((b: BrandItem) => {
-          if (b.name.toLowerCase() === 'sumas' && (!b.logo || b.logo.includes('541888946425') || b.logo.includes('logo_vertikal'))) {
-            return { ...b, name: 'Sumas', logo: '/assets/brand/logo_horizontal.svg' };
-          }
-          return b;
-        });
-      }
-      return [];
-    } catch (e) {
-      return [];
-    }
-  });
-
-  const [users, setUsers] = useState<UserItem[]>(() => {
-    try {
-      const savedUsers = localStorage.getItem('sumas_users') || localStorage.getItem('mki_users');
-      return savedUsers ? JSON.parse(savedUsers) : [];
-    } catch (e) {
-      return [];
-    }
-  });
-
-  const [products, setProducts] = useState<ProductItem[]>(() => {
-    try {
-      const savedProducts = localStorage.getItem('sumas_products') || localStorage.getItem('mki_products');
-      return savedProducts ? JSON.parse(savedProducts) : [];
-    } catch (e) {
-      return [];
-    }
-  });
+  const [batches, setBatches] = useState<any[]>([]);
+  const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [brands, setBrands] = useState<BrandItem[]>([]);
+  const [users, setUsers] = useState<UserItem[]>([]);
+  const [products, setProducts] = useState<ProductItem[]>([]);
 
   // State master kategori produk dari database SQLite (untuk resolusi hirarki 3 layer)
   const [categories, setCategories] = useState<{ id: string; name: string; level: number; parentId?: string | null; specSchema?: string | null }[]>([]);
@@ -1553,64 +1505,81 @@ export default function App() {
   }, [authUser?.id]);
 
   useEffect(() => {
-    try {
-      localStorage.setItem('sumas_batches', JSON.stringify(batches));
-    } catch (e) {
-      console.error("Gagal menyimpan data ke localStorage", e);
-    }
-  }, [batches]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('sumas_auditLogs', JSON.stringify(auditLogs));
-    } catch (e) {
-      console.error("Gagal menyimpan log ke localStorage", e);
-    }
-  }, [auditLogs]);
-
-  useEffect(() => {
     brands.forEach(b => {
       registerB2BBrand(b.name, b.businessType === 'B2B');
     });
-    try {
-      localStorage.setItem('sumas_brands', JSON.stringify(brands));
-    } catch (e) {
-      console.error("Gagal menyimpan brands ke localStorage", e);
-    }
   }, [brands]);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem('sumas_users', JSON.stringify(users));
-    } catch (e) {
-      console.error("Gagal menyimpan users ke localStorage", e);
-    }
-  }, [users]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem('sumas_products', JSON.stringify(products));
-    } catch (e) {
-      console.error("Gagal menyimpan products ke localStorage", e);
-    }
-  }, [products]);
-
-  // Sinkronisasi otomatis saat berpindah ke menu Brand, SKU, atau Users
+  // Sinkronisasi otomatis dinamis dari backend saat berpindah menu
   useEffect(() => {
     if (!authUser?.id) return;
     if (activeMenu !== 'trash') {
       refreshTrashCount();
     }
-    if (activeMenu === 'brand' || activeMenu === 'users' || activeMenu === 'sku') {
+    if (activeMenu === 'dashboard') {
+      Promise.all([
+        api.getDashboardStats().catch(() => null),
+        api.getBatches().catch(() => null),
+        api.getBrands().catch(() => null),
+        api.getProducts().catch(() => null),
+        api.getAuditLogs().catch(() => null),
+      ])
+        .then(([dbStats, dbBatches, dbBrands, dbProducts, dbLogs]) => {
+          if (dbStats) setDashboardStats(dbStats);
+          if (Array.isArray(dbBatches)) setBatches(dbBatches);
+          if (Array.isArray(dbBrands)) setBrands(dbBrands);
+          if (Array.isArray(dbProducts)) setProducts(dbProducts);
+          if (Array.isArray(dbLogs)) setAuditLogs(dbLogs);
+        })
+        .catch(() => {});
+    } else if (activeMenu === 'brand' || activeMenu === 'users' || activeMenu === 'sku') {
       Promise.all([
         api.getBrands().catch(() => null),
         api.getUsers().catch(() => null),
-        api.getProducts().catch(() => null)
+        api.getProducts().catch(() => null),
+        api.getCategories().catch(() => null),
+        api.getBatches().catch(() => null),
       ])
-        .then(([dbBrands, dbUsers, dbProducts]) => {
+        .then(([dbBrands, dbUsers, dbProducts, dbCategories, dbBatches]) => {
           if (Array.isArray(dbBrands)) setBrands(dbBrands);
           if (Array.isArray(dbUsers)) setUsers(dbUsers);
           if (Array.isArray(dbProducts)) setProducts(dbProducts);
+          if (Array.isArray(dbCategories)) setCategories(dbCategories);
+          if (Array.isArray(dbBatches)) setBatches(dbBatches);
+        })
+        .catch(() => {});
+    } else if (activeMenu === 'tag-qr') {
+      Promise.all([
+        api.getBatches().catch(() => null),
+        api.getBrands().catch(() => null),
+        api.getProducts().catch(() => null),
+        api.getAuditLogs().catch(() => null),
+      ])
+        .then(([dbBatches, dbBrands, dbProducts, dbLogs]) => {
+          if (Array.isArray(dbBatches)) setBatches(dbBatches);
+          if (Array.isArray(dbBrands)) setBrands(dbBrands);
+          if (Array.isArray(dbProducts)) setProducts(dbProducts);
+          if (Array.isArray(dbLogs)) setAuditLogs(dbLogs);
+        })
+        .catch(() => {});
+    } else if (activeMenu === 'category') {
+      Promise.all([
+        api.getCategories().catch(() => null),
+        api.getProducts().catch(() => null),
+      ])
+        .then(([dbCategories, dbProducts]) => {
+          if (Array.isArray(dbCategories)) setCategories(dbCategories);
+          if (Array.isArray(dbProducts)) setProducts(dbProducts);
+        })
+        .catch(() => {});
+    } else if (activeMenu === 'scan') {
+      Promise.all([
+        api.getBrands().catch(() => null),
+        api.getBatches().catch(() => null),
+      ])
+        .then(([dbBrands, dbBatches]) => {
+          if (Array.isArray(dbBrands)) setBrands(dbBrands);
+          if (Array.isArray(dbBatches)) setBatches(dbBatches);
         })
         .catch(() => {});
     }
@@ -3005,9 +2974,19 @@ export default function App() {
 
     try {
       await api.updateBrand(brandForm.id, updatedData);
-      const [freshBrands, freshUsers] = await Promise.all([api.getBrands(), api.getUsers()]);
+      const [freshBrands, freshUsers, freshProducts, freshBatches, freshStats] = await Promise.all([
+        api.getBrands().catch(() => null),
+        api.getUsers().catch(() => null),
+        api.getProducts().catch(() => null),
+        api.getBatches().catch(() => null),
+        api.getDashboardStats().catch(() => null),
+      ]);
       if (Array.isArray(freshBrands)) setBrands(freshBrands);
       if (Array.isArray(freshUsers)) setUsers(freshUsers);
+      if (Array.isArray(freshProducts)) setProducts(freshProducts);
+      if (Array.isArray(freshBatches)) setBatches(freshBatches);
+      if (freshStats) setDashboardStats(freshStats);
+      fetchScanData();
       triggerAlert(
         'Brand Berhasil Diperbarui',
         `Data brand "${brandForm.name.trim()}" berhasil diperbarui.`,
@@ -3035,21 +3014,26 @@ export default function App() {
     const lowerBrandName = brandName.trim().toLowerCase();
     const prevBrands = brands;
     const prevProducts = products;
+    const prevBatches = batches;
     setBrands(prev => prev.filter(b => b.id !== brandId));
     setProducts(prev => prev.filter(p => p.brandId !== brandId && (p.brandName || '').trim().toLowerCase() !== lowerBrandName));
+    setBatches(prev => prev.filter(bt => (bt.brand || '').trim().toLowerCase() !== lowerBrandName));
     setIsDeleteBrandModalOpen(false);
     setBrandToDelete(null);
 
     try {
       await api.deleteBrand(brandId);
-      const [freshBrands, freshProducts, freshStats] = await Promise.all([
+      const [freshBrands, freshProducts, freshBatches, freshStats] = await Promise.all([
         api.getBrands().catch(() => null),
         api.getProducts().catch(() => null),
+        api.getBatches().catch(() => null),
         api.getDashboardStats().catch(() => null),
       ]);
       if (Array.isArray(freshBrands)) setBrands(freshBrands);
       if (Array.isArray(freshProducts)) setProducts(freshProducts);
+      if (Array.isArray(freshBatches)) setBatches(freshBatches);
       if (freshStats) setDashboardStats(freshStats);
+      fetchScanData();
       refreshTrashCount();
       triggerAlert(
         'Dipindahkan ke Tempat Sampah',
@@ -3059,6 +3043,7 @@ export default function App() {
     } catch (err: any) {
       setBrands(prevBrands);
       setProducts(prevProducts);
+      setBatches(prevBatches);
       console.error('Gagal hapus brand di SQLite:', err);
       triggerAlert(
         'Gagal Menghapus Brand',
@@ -3900,8 +3885,15 @@ export default function App() {
 
     try {
       await api.updateProduct(skuForm.id, updatedData);
-      const freshProducts = await api.getProducts();
+      const [freshProducts, freshBatches, freshStats] = await Promise.all([
+        api.getProducts().catch(() => null),
+        api.getBatches().catch(() => null),
+        api.getDashboardStats().catch(() => null),
+      ]);
       if (Array.isArray(freshProducts)) setProducts(freshProducts);
+      if (Array.isArray(freshBatches)) setBatches(freshBatches);
+      if (freshStats) setDashboardStats(freshStats);
+      fetchScanData();
       triggerAlert(
         'SKU Berhasil Diperbarui',
         `Data produk "${skuForm.sku.trim()}" telah diperbarui di database.`,
@@ -4272,8 +4264,12 @@ export default function App() {
     // Simpan ke SQLite backend dan refresh data riwayat
     api.createBatch(newBatch)
       .then(async () => {
-        const freshBatches = await api.getBatches();
+        const [freshBatches, freshStats] = await Promise.all([
+          api.getBatches().catch(() => null),
+          api.getDashboardStats().catch(() => null),
+        ]);
         if (Array.isArray(freshBatches)) setBatches(freshBatches);
+        if (freshStats) setDashboardStats(freshStats);
         triggerAlert(
           'Batch Berhasil Dibuat',
           `Batch "${newBatch.batchId}" (${newBatch.qty} tag) berhasil di-generate dengan PIN ${newBatch.pinLength} digit ${selectedPinFormat === 'alphanumeric' ? 'Huruf & Angka' : 'Angka'}.`,
@@ -4405,6 +4401,8 @@ export default function App() {
     api.deleteBatch(targetId)
       .then(() => {
         refreshTrashCount();
+        api.getDashboardStats().then((s) => { if (s) setDashboardStats(s); }).catch(() => {});
+        fetchScanData();
         triggerAlert(
           'Dipindahkan ke Tempat Sampah',
           `Batch "${batchName}" beserta seluruh nomor tag dipindahkan ke Tempat Sampah (tersimpan 30 hari).`,
@@ -8185,15 +8183,24 @@ export default function App() {
                 Promise.all([
                   api.getBrands().catch(() => null),
                   api.getProducts().catch(() => null),
+                  api.getBatches().catch(() => null),
                   api.getDashboardStats().catch(() => null),
-                ]).then(([b, p, s]) => {
+                ]).then(([b, p, bt, s]) => {
                   if (Array.isArray(b)) setBrands(b);
+                  if (Array.isArray(p)) setProducts(p);
+                  if (Array.isArray(bt)) setBatches(bt);
+                  if (s) setDashboardStats(s);
+                });
+                fetchScanData();
+              }
+              if (types.includes('product')) {
+                Promise.all([
+                  api.getProducts().catch(() => null),
+                  api.getDashboardStats().catch(() => null),
+                ]).then(([p, s]) => {
                   if (Array.isArray(p)) setProducts(p);
                   if (s) setDashboardStats(s);
                 });
-              }
-              if (types.includes('product')) {
-                api.getProducts().then((res) => { if (Array.isArray(res)) setProducts(res); }).catch(() => {});
               }
               if (types.includes('category')) {
                 api.getCategories().then((res) => { if (Array.isArray(res)) setCategories(res); }).catch(() => {});
@@ -8208,6 +8215,7 @@ export default function App() {
                   if (Array.isArray(l)) setAuditLogs(l);
                   if (s) setDashboardStats(s);
                 });
+                fetchScanData();
               }
               if (types.includes('user')) {
                 Promise.all([api.getUsers().catch(() => null), api.getBrands().catch(() => null)])

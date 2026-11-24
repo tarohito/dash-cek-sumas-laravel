@@ -12,6 +12,41 @@ use Illuminate\Support\Facades\DB;
 
 class ScanController extends Controller
 {
+    /**
+     * @return array{brands: array<string, bool>, batches: array<string, bool>}
+     */
+    private function loadActiveScanSets(): array
+    {
+        $brands = [];
+        foreach (DB::table('brands')->select(['name'])->get() as $br) {
+            $lower = strtolower(trim((string) ($br->name ?? '')));
+            if ($lower !== '') {
+                $brands[$lower] = true;
+            }
+        }
+        $batches = [];
+        foreach (DB::table('batches')->select(['batchId'])->get() as $b) {
+            $lower = strtolower(trim((string) ($b->batchId ?? '')));
+            if ($lower !== '') {
+                $batches[$lower] = true;
+            }
+        }
+        return ['brands' => $brands, 'batches' => $batches];
+    }
+
+    private function isScanPointLinkedToActiveData(object $row, array $activeSets): bool
+    {
+        $brandLower = strtolower(trim((string) ($row->brand ?? '')));
+        if ($brandLower === '' || !isset($activeSets['brands'][$brandLower])) {
+            return false;
+        }
+        $batchCodeLower = strtolower(trim((string) ($row->batchId ?? '')));
+        if ($batchCodeLower !== '' && !isset($activeSets['batches'][$batchCodeLower])) {
+            return false;
+        }
+        return true;
+    }
+
     public function locations(Request $request): JsonResponse
     {
         if (!$this->canAny($request, 'dashboard.view', 'scans.view')) {
@@ -19,10 +54,14 @@ class ScanController extends Controller
         }
 
         $scope = $this->brandScope($request);
+        $activeSets = $this->loadActiveScanSets();
         $rows = DB::table('scan_points')->orderBy('id')->get();
         $result = [];
 
         foreach ($rows as $rowObj) {
+            if (!$this->isScanPointLinkedToActiveData($rowObj, $activeSets)) {
+                continue;
+            }
             $r = (array) $rowObj;
             if (empty($scope['isGlobal']) && !RbacService::canScopeAccessBrand($scope, $r['brand'] ?? null)) {
                 continue;
@@ -53,7 +92,8 @@ class ScanController extends Controller
         }
 
         $scope = $this->brandScope($request);
-        $rows = DB::table('scan_points')->select(['brand', 'status', 'totalScans', 'todayScans'])->get();
+        $activeSets = $this->loadActiveScanSets();
+        $rows = DB::table('scan_points')->select(['brand', 'batchId', 'status', 'totalScans', 'todayScans'])->get();
 
         $totalLocations = 0;
         $totalScans = 0;
@@ -63,6 +103,9 @@ class ScanController extends Controller
         $suspicious = 0;
 
         foreach ($rows as $r) {
+            if (!$this->isScanPointLinkedToActiveData($r, $activeSets)) {
+                continue;
+            }
             if (empty($scope['isGlobal']) && !RbacService::canScopeAccessBrand($scope, $r->brand ?? null)) {
                 continue;
             }
@@ -95,6 +138,7 @@ class ScanController extends Controller
         }
 
         $scope = $this->brandScope($request);
+        $activeSets = $this->loadActiveScanSets();
         $range = SecurityHardeningService::sanitizeStringInput($request->query('range', '7d'), 10);
         $requestedBrand = SecurityHardeningService::sanitizeStringInput($request->query('brand', ''), 120);
 
@@ -103,11 +147,14 @@ class ScanController extends Controller
         }
 
         $rows = DB::table('scan_points')
-            ->select(['id', 'brand', 'totalScans', 'todayScans', 'status', 'latestTime', 'createdAt', 'scanHistory'])
+            ->select(['id', 'brand', 'batchId', 'totalScans', 'todayScans', 'status', 'latestTime', 'createdAt', 'scanHistory'])
             ->get();
 
         $scopedRows = [];
         foreach ($rows as $r) {
+            if (!$this->isScanPointLinkedToActiveData($r, $activeSets)) {
+                continue;
+            }
             if (!empty($scope['isGlobal']) || RbacService::canScopeAccessBrand($scope, $r->brand ?? null)) {
                 $scopedRows[] = $r;
             }

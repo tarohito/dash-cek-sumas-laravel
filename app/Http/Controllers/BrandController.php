@@ -171,7 +171,34 @@ class BrandController extends Controller
             'status' => array_key_exists('status', $b) ? (($b['status'] === 'Nonaktif') ? 'Nonaktif' : 'Aktif') : $existing->status,
         ];
 
-        DB::table('brands')->where('id', $decodedId)->update($updated);
+        DB::transaction(function () use ($decodedId, $existing, $updated) {
+            DB::table('brands')->where('id', $decodedId)->update($updated);
+
+            $oldName = trim((string) ($existing->name ?? ''));
+            $newName = trim((string) ($updated['name'] ?? ''));
+            if ($oldName !== '' && $newName !== '' && strcasecmp($oldName, $newName) !== 0) {
+                DB::table('products')
+                    ->where('brandId', $decodedId)
+                    ->orWhereRaw('LOWER(brandName) = LOWER(?)', [$oldName])
+                    ->update(['brandName' => $newName]);
+
+                DB::table('batches')
+                    ->whereRaw('LOWER(brand) = LOWER(?)', [$oldName])
+                    ->update(['brand' => $newName]);
+
+                DB::table('scan_points')
+                    ->whereRaw('LOWER(brand) = LOWER(?)', [$oldName])
+                    ->update(['brand' => $newName]);
+
+                if (\Illuminate\Support\Facades\Schema::hasTable('trash_items')) {
+                    DB::table('trash_items')
+                        ->where('brandId', $decodedId)
+                        ->orWhereRaw('LOWER(brandName) = LOWER(?)', [$oldName])
+                        ->update(['brandName' => $newName]);
+                }
+            }
+        });
+
         $result = (array) DB::table('brands')->where('id', $decodedId)->first();
 
         return response()->json([

@@ -26,11 +26,23 @@ class BatchController extends Controller
             ->get()
             ->keyBy('batchId');
 
+        $activeBrandNameSet = [];
+        foreach (DB::table('brands')->select(['name'])->get() as $br) {
+            $lower = strtolower(trim((string) ($br->name ?? '')));
+            if ($lower !== '') {
+                $activeBrandNameSet[$lower] = true;
+            }
+        }
+
         $rows = DB::table('batches')->orderByDesc('date')->orderByDesc('id')->get();
         $result = [];
 
         foreach ($rows as $rowObj) {
             $row = (array) $rowObj;
+            $rowBrandLower = strtolower(trim((string) ($row['brand'] ?? '')));
+            if ($rowBrandLower === '' || !isset($activeBrandNameSet[$rowBrandLower])) {
+                continue;
+            }
             if (empty($scope['isGlobal']) && !RbacService::canScopeAccessBrand($scope, $row['brand'] ?? null)) {
                 continue;
             }

@@ -350,16 +350,32 @@ class ProductController extends Controller
             ? (!empty($p['description']) ? SecurityHardeningService::sanitizeStringInput($p['description'], 1500) : null)
             : $existing->description;
 
-        DB::table('products')->where('id', $decodedId)->update([
-            'brandId' => $brandId,
-            'brandName' => $brandName,
-            'sku' => $sku,
-            'skuCode' => $skuCode,
-            'category' => $category,
-            'isB2B' => $isB2B,
-            'description' => $description,
-            'image' => $nextImage,
-        ]);
+        DB::transaction(function () use ($decodedId, $existing, $brandId, $brandName, $sku, $skuCode, $category, $isB2B, $description, $nextImage) {
+            DB::table('products')->where('id', $decodedId)->update([
+                'brandId' => $brandId,
+                'brandName' => $brandName,
+                'sku' => $sku,
+                'skuCode' => $skuCode,
+                'category' => $category,
+                'isB2B' => $isB2B,
+                'description' => $description,
+                'image' => $nextImage,
+            ]);
+
+            $oldSku = trim((string) ($existing->sku ?? ''));
+            $oldBrand = trim((string) ($existing->brandName ?? ''));
+            if ($oldSku !== '' && ($oldSku !== $sku || strcasecmp($oldBrand, (string) $brandName) !== 0)) {
+                DB::table('batches')
+                    ->whereRaw('LOWER(sku) = LOWER(?)', [$oldSku])
+                    ->whereRaw('LOWER(brand) = LOWER(?)', [$oldBrand])
+                    ->update(['sku' => $sku, 'brand' => $brandName]);
+
+                DB::table('scan_points')
+                    ->whereRaw('LOWER(productType) = LOWER(?)', [$oldSku])
+                    ->whereRaw('LOWER(brand) = LOWER(?)', [$oldBrand])
+                    ->update(['productType' => $sku, 'brand' => $brandName]);
+            }
+        });
 
         return response()->json([
             'id' => $decodedId,
