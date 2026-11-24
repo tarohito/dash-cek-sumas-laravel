@@ -80,7 +80,7 @@ import { CustomTooltipProvider } from './components/CustomTooltip';
 import { CategoryManager } from './components/CategoryManager';
 import { CreateSkuPage } from './components/CreateSkuPage';
 import { SettingsManager } from './components/SettingsManager';
-import { TrashManager, type TrashEntityType } from './components/TrashManager';
+import { TrashManager, type TrashCachePayload, type TrashEntityType } from './components/TrashManager';
 import { LoginPage } from './components/LoginPage';
 import { SplashScreen } from './components/SplashScreen';
 import { RolePermissionsPanel } from './components/RolePermissionsPanel';
@@ -1124,12 +1124,27 @@ export default function App() {
   };
 
   const [trashCount, setTrashCount] = useState<number>(0);
+  const [trashCache, setTrashCache] = useState<TrashCachePayload | null>(null);
   const refreshTrashCount = () => {
-    api.getTrashCount()
-      .then((res) => {
-        if (res && typeof res.count === 'number') {
-          setTrashCount(res.count);
-        }
+    apiFetch('/api/trash')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!data || !Array.isArray(data.items)) return;
+        const nextCounts = data.counts || {
+          all: data.items.length,
+          brand: 0,
+          product: 0,
+          category: 0,
+          batch: 0,
+          user: 0,
+          tag_layout: 0,
+        };
+        setTrashCount(nextCounts.all ?? data.items.length);
+        setTrashCache({
+          items: data.items,
+          counts: nextCounts,
+          retentionDays: typeof data.retentionDays === 'number' ? data.retentionDays : 30,
+        });
       })
       .catch(() => {});
   };
@@ -1578,7 +1593,9 @@ export default function App() {
   // Sinkronisasi otomatis saat berpindah ke menu Brand, SKU, atau Users
   useEffect(() => {
     if (!authUser?.id) return;
-    refreshTrashCount();
+    if (activeMenu !== 'trash') {
+      refreshTrashCount();
+    }
     if (activeMenu === 'brand' || activeMenu === 'users' || activeMenu === 'sku') {
       Promise.all([
         api.getBrands().catch(() => null),
@@ -1846,6 +1863,8 @@ export default function App() {
       setRbacMatrix(mergeRbacMatrix(payload.matrix));
     }
     setAuthUser(payload.user);
+    setTrashCache(null);
+    setTrashCount(0);
     setActiveMenu('dashboard');
     setUsersSubTab('list');
     triggerAlert(
@@ -1861,6 +1880,8 @@ export default function App() {
     } catch (_) {}
     clearStoredSessionToken();
     setAuthUser(null);
+    setTrashCache(null);
+    setTrashCount(0);
     setBatches([]);
     setAuditLogs([]);
     setBrands([]);
@@ -8094,6 +8115,8 @@ export default function App() {
           renderScanContent()
         ) : activeMenu === 'trash' ? (
           <TrashManager
+            initialData={trashCache}
+            onDataLoaded={setTrashCache}
             onAlert={triggerAlert}
             onCountChanged={(cnt) => setTrashCount(cnt)}
             onRestored={(types: TrashEntityType[]) => {

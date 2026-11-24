@@ -19,9 +19,31 @@ class TrashService
         'tag_layout',
     ];
 
+    public const METADATA_COLUMNS = [
+        'id',
+        'entityType',
+        'entityId',
+        'title',
+        'subtitle',
+        'brandName',
+        'brandId',
+        'deletedById',
+        'deletedByName',
+        'deletedAt',
+        'deletedAtTs',
+        'expiresAtTs',
+        'itemCount',
+    ];
+
+    private static bool $tableEnsured = false;
+
     public static function ensureTableExists(): void
     {
+        if (self::$tableEnsured) {
+            return;
+        }
         if (Schema::hasTable('trash_items')) {
+            self::$tableEnsured = true;
             return;
         }
 
@@ -41,12 +63,21 @@ class TrashService
             $table->integer('itemCount')->default(1);
             $table->longText('payload');
         });
+        self::$tableEnsured = true;
     }
 
     public static function purgeExpired(): int
     {
         self::ensureTableExists();
         $nowMs = (int) round(microtime(true) * 1000);
+        // Indexed read-only precheck avoids write locks on GET requests when nothing is expired
+        $hasExpired = DB::table('trash_items')
+            ->where('expiresAtTs', '<=', $nowMs)
+            ->limit(1)
+            ->exists();
+        if (!$hasExpired) {
+            return 0;
+        }
         return DB::table('trash_items')->where('expiresAtTs', '<=', $nowMs)->delete();
     }
 

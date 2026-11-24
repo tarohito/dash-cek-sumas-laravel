@@ -40,7 +40,10 @@ class TrashController extends Controller
         $typeFilter = SecurityHardeningService::sanitizeStringInput((string) $request->query('type', 'all'), 40) ?: 'all';
         $search = strtolower(SecurityHardeningService::sanitizeStringInput((string) $request->query('q', ''), 120));
 
-        $rows = DB::table('trash_items')->orderByDesc('deletedAtTs')->get();
+        $rows = DB::table('trash_items')
+            ->select(TrashService::METADATA_COLUMNS)
+            ->orderByDesc('deletedAtTs')
+            ->get();
 
         $counts = [
             'all' => 0,

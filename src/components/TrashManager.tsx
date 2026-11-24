@@ -51,10 +51,18 @@ export interface TrashCounts {
   tag_layout: number;
 }
 
+export interface TrashCachePayload {
+  items: TrashItem[];
+  counts: TrashCounts;
+  retentionDays: number;
+}
+
 interface TrashManagerProps {
   onAlert?: (title: string, message: string, type?: 'success' | 'warning' | 'error' | 'info') => void;
   onRestored?: (restoredTypes: TrashEntityType[]) => void;
   onCountChanged?: (count: number) => void;
+  initialData?: TrashCachePayload | null;
+  onDataLoaded?: (data: TrashCachePayload) => void;
 }
 
 const TYPE_META: Record<
@@ -111,28 +119,33 @@ const formatTrashDate = (iso?: string, ts?: number): string => {
   });
 };
 
+const EMPTY_TRASH_COUNTS: TrashCounts = {
+  all: 0,
+  brand: 0,
+  product: 0,
+  category: 0,
+  batch: 0,
+  user: 0,
+  tag_layout: 0,
+};
+
 export const TrashManager: React.FC<TrashManagerProps> = ({
   onAlert,
   onRestored,
   onCountChanged,
+  initialData,
+  onDataLoaded,
 }) => {
-  const [items, setItems] = useState<TrashItem[]>([]);
-  const [counts, setCounts] = useState<TrashCounts>({
-    all: 0,
-    brand: 0,
-    product: 0,
-    category: 0,
-    batch: 0,
-    user: 0,
-    tag_layout: 0,
-  });
-  const [retentionDays, setRetentionDays] = useState<number>(30);
+  const [items, setItems] = useState<TrashItem[]>(() => initialData?.items ?? []);
+  const [counts, setCounts] = useState<TrashCounts>(() => initialData?.counts ?? EMPTY_TRASH_COUNTS);
+  const [retentionDays, setRetentionDays] = useState<number>(() => initialData?.retentionDays ?? 30);
   const [typeFilter, setTypeFilter] = useState<'all' | TrashEntityType>('all');
   const [sortBy, setSortBy] = useState<'newest' | 'expiring' | 'title-asc'>('newest');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [perPage] = useState<number>(15);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isLoading, setIsLoading] = useState<boolean>(() => !initialData);
+  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [isBulkBusy, setIsBulkBusy] = useState<boolean>(false);
@@ -152,7 +165,11 @@ export const TrashManager: React.FC<TrashManagerProps> = ({
 
   const fetchTrash = async (silent = false) => {
     try {
-      if (!silent) setIsLoading(true);
+      if (!silent) {
+        setIsLoading(true);
+      } else {
+        setIsRefreshing(true);
+      }
       const res = await apiFetch('/api/trash');
       if (!res.ok) {
         throw new Error('Gagal memuat data Tempat Sampah.');
@@ -160,30 +177,36 @@ export const TrashManager: React.FC<TrashManagerProps> = ({
       const data = await res.json();
       const loadedItems = Array.isArray(data?.items) ? (data.items as TrashItem[]) : [];
       const nextCounts: TrashCounts = data?.counts || {
+        ...EMPTY_TRASH_COUNTS,
         all: loadedItems.length,
-        brand: 0,
-        product: 0,
-        category: 0,
-        batch: 0,
-        user: 0,
-        tag_layout: 0,
       };
+      const nextRetention =
+        typeof data?.retentionDays === 'number' ? data.retentionDays : retentionDays;
       setItems(loadedItems);
       setCounts(nextCounts);
-      if (typeof data?.retentionDays === 'number') {
-        setRetentionDays(data.retentionDays);
-      }
+      setRetentionDays(nextRetention);
       onCountChanged?.(nextCounts.all ?? loadedItems.length);
+      onDataLoaded?.({
+        items: loadedItems,
+        counts: nextCounts,
+        retentionDays: nextRetention,
+      });
       setSelectedIds((prev) => prev.filter((id) => loadedItems.some((item) => item.id === id)));
     } catch (err: any) {
-      onAlert?.('Gagal Memuat Tempat Sampah', err?.message || 'Terjadi kesalahan saat membaca Tempat Sampah.', 'error');
+      if (!silent) {
+        onAlert?.('Gagal Memuat Tempat Sampah', err?.message || 'Terjadi kesalahan saat membaca Tempat Sampah.', 'error');
+      }
     } finally {
-      if (!silent) setIsLoading(false);
+      if (!silent) {
+        setIsLoading(false);
+      } else {
+        setIsRefreshing(false);
+      }
     }
   };
 
   useEffect(() => {
-    fetchTrash();
+    fetchTrash(Boolean(initialData));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -406,11 +429,11 @@ export const TrashManager: React.FC<TrashManagerProps> = ({
           <div className="grid grid-cols-2 sm:flex items-center gap-2.5 w-full sm:w-auto">
             <button
               type="button"
-              onClick={() => fetchTrash()}
-              disabled={isLoading}
+              onClick={() => fetchTrash(items.length > 0)}
+              disabled={isLoading || isRefreshing}
               className="w-full sm:w-auto h-10 px-4 sm:px-5 rounded-full border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-slate-700 dark:text-zinc-200 hover:bg-slate-50 dark:hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed text-xs sm:text-sm font-semibold inline-flex items-center justify-center transition-all cursor-pointer whitespace-nowrap active:scale-95"
             >
-              <span>{isLoading ? 'Menyinkronkan...' : 'Segarkan'}</span>
+              <span>{isLoading || isRefreshing ? 'Menyinkronkan...' : 'Segarkan'}</span>
             </button>
             <button
               type="button"
