@@ -85,10 +85,82 @@ class CategoryController extends Controller
 
         $name = $request->has('name')
             ? SecurityHardeningService::sanitizeStringInput($request->input('name'), 120)
-            : $existing->name;
-        DB::table('categories')->where('id', $decodedId)->update(['name' => $name]);
+            : (string) $existing->name;
+        if ($name === '') {
+            return response()->json(['error' => 'Nama kategori wajib diisi.'], 400);
+        }
 
-        return response()->json(DB::table('categories')->where('id', $decodedId)->first());
+        $oldName = (string) $existing->name;
+        $level = (int) ($existing->level ?? 1);
+        $updatedProductsCount = 0;
+
+        DB::transaction(function () use ($decodedId, $oldName, $name, $level, $existing, &$updatedProductsCount) {
+            DB::table('categories')->where('id', $decodedId)->update(['name' => $name]);
+
+            if ($oldName !== '' && $oldName !== $name) {
+                $parentName = null;
+                $grandparentName = null;
+
+                if ($level >= 2 && !empty($existing->parentId)) {
+                    $parentRow = DB::table('categories')->where('id', $existing->parentId)->first(['id', 'name', 'parentId']);
+                    if ($parentRow) {
+                        $parentName = (string) $parentRow->name;
+                        if ($level === 3 && !empty($parentRow->parentId)) {
+                            $gpRow = DB::table('categories')->where('id', $parentRow->parentId)->first(['name']);
+                            if ($gpRow) {
+                                $grandparentName = (string) $gpRow->name;
+                            }
+                        }
+                    }
+                }
+
+                $products = DB::table('products')->select(['id', 'category'])->get();
+                foreach ($products as $prod) {
+                    $raw = trim((string) ($prod->category ?? ''));
+                    if ($raw === '') {
+                        continue;
+                    }
+                    $parts = array_values(array_filter(array_map('trim', explode('>', $raw)), static fn ($v) => $v !== ''));
+                    if (count($parts) === 0) {
+                        continue;
+                    }
+
+                    $changed = false;
+                    if ($level === 1 && strcasecmp($parts[0], $oldName) === 0) {
+                        $parts[0] = $name;
+                        $changed = true;
+                    } elseif ($level === 2 && isset($parts[1])) {
+                        $parentOk = ($parentName === null || strcasecmp($parts[0], $parentName) === 0);
+                        if ($parentOk && strcasecmp($parts[1], $oldName) === 0) {
+                            $parts[1] = $name;
+                            $changed = true;
+                        }
+                    } elseif ($level === 3 && isset($parts[2])) {
+                        $gpOk = ($grandparentName === null || strcasecmp($parts[0], $grandparentName) === 0);
+                        $parentOk = ($parentName === null || strcasecmp($parts[1], $parentName) === 0);
+                        if ($gpOk && $parentOk && strcasecmp($parts[2], $oldName) === 0) {
+                            $parts[2] = $name;
+                            $changed = true;
+                        }
+                    } elseif (count($parts) === 1 && strcasecmp($parts[0], $oldName) === 0) {
+                        $parts[0] = $name;
+                        $changed = true;
+                    }
+
+                    if ($changed) {
+                        $nextPath = mb_substr(implode(' > ', $parts), 0, 400, 'UTF-8');
+                        DB::table('products')->where('id', $prod->id)->update(['category' => $nextPath]);
+                        $updatedProductsCount++;
+                    }
+                }
+            }
+        });
+
+        $updatedRow = (array) DB::table('categories')->where('id', $decodedId)->first();
+        $updatedRow['level'] = (int) ($updatedRow['level'] ?? 1);
+        $updatedRow['updatedProductsCount'] = $updatedProductsCount;
+
+        return response()->json($updatedRow);
     }
 
     public function destroy(Request $request, string $id): JsonResponse
@@ -103,15 +175,20 @@ class CategoryController extends Controller
             return response()->json(['error' => 'Kategori tidak ditemukan.'], 404);
         }
 
-        DB::transaction(function () use ($decodedId) {
-            $children = DB::table('categories')->where('parentId', $decodedId)->pluck('id')->all();
-            if (count($children) > 0) {
-                DB::table('categories')->whereIn('parentId', $children)->delete();
-                DB::table('categories')->whereIn('id', $children)->delete();
+        $deletedIds = [$decodedId];
+        DB::transaction(function () use ($decodedId, &$deletedIds) {
+            $childrenL2 = DB::table('categories')->where('parentId', $decodedId)->pluck('id')->all();
+            if (count($childrenL2) > 0) {
+                $childrenL3 = DB::table('categories')->whereIn('parentId', $childrenL2)->pluck('id')->all();
+                $deletedIds = array_values(array_unique(array_merge($deletedIds, $childrenL2, $childrenL3)));
+                if (count($childrenL3) > 0) {
+                    DB::table('categories')->whereIn('id', $childrenL3)->delete();
+                }
+                DB::table('categories')->whereIn('id', $childrenL2)->delete();
             }
             DB::table('categories')->where('id', $decodedId)->delete();
         });
 
-        return response()->json(['success' => true]);
+        return response()->json(['success' => true, 'deletedIds' => $deletedIds]);
     }
 }

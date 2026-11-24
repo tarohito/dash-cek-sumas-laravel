@@ -4,6 +4,7 @@ import { CustomSelect } from './CustomSelect';
 import { CategorySpecDrawer } from './CategorySpecDrawer';
 import { CategoryPickerModal } from './CategoryPickerModal';
 import { compressAndConvertToWebP } from '../utils/imageOptimizer';
+import { getInitialsAvatar } from '../utils/avatar';
 import { 
   Trash2, 
   Check, 
@@ -20,7 +21,6 @@ import {
 interface BrandRef {
   id: string;
   name: string;
-  category: string;
   logo?: string | null;
 }
 
@@ -259,7 +259,7 @@ export const CreateSkuPage: React.FC<CreateSkuPageProps> = ({
       setBrandName(initialData.brandName || bObj?.name || '');
       setSkuName(initialData.sku || '');
       setSkuCode(initialData.skuCode || '');
-      setCategory(initialData.category || bObj?.category || '');
+      setCategory(initialData.category || '');
       setProductImage(initialData.image || '');
       setDescription(parsedInitial.desc || '');
       setCategoryFieldValues(parsedInitial.rawSpecs || {});
@@ -661,8 +661,7 @@ export const CreateSkuPage: React.FC<CreateSkuPageProps> = ({
                   options={brands.map(b => ({
                     value: b.id,
                     label: b.name,
-                    sublabel: b.category,
-                    avatar: b.logo || null
+                    avatar: b.logo || getInitialsAvatar(b.name, b.id || b.name)
                   }))}
                   placeholder="Pilih Brand..."
                   searchable={true}

@@ -36,9 +36,10 @@ interface CategoryManagerProps {
   canManage?: boolean;
   onAlert?: (title: string, message: string, type?: 'success' | 'warning' | 'error' | 'info') => void;
   onCategoriesUpdated?: (cats: CategoryItem[]) => void;
+  onCategoryRenamed?: () => void;
 }
 
-export const CategoryManager: React.FC<CategoryManagerProps> = ({ currentRole = 'Super Admin', canManage, onAlert, onCategoriesUpdated }) => {
+export const CategoryManager: React.FC<CategoryManagerProps> = ({ currentRole = 'Super Admin', canManage, onAlert, onCategoriesUpdated, onCategoryRenamed }) => {
   const canEditCategories = canManage !== undefined ? canManage : currentRole === 'Super Admin';
   const [categories, setCategories] = useState<CategoryItem[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
@@ -117,6 +118,7 @@ export const CategoryManager: React.FC<CategoryManagerProps> = ({ currentRole = 
         const data = await res.json();
         if (Array.isArray(data)) {
           setCategories(data);
+          onCategoriesUpdated?.(data);
           
           // Auto-select first Level 1 if none selected
           const l1Items = data.filter((c: CategoryItem) => c.level === 1);
@@ -262,7 +264,9 @@ export const CategoryManager: React.FC<CategoryManagerProps> = ({ currentRole = 
       });
       if (res.ok) {
         const newCat = await res.json();
-        setCategories(prev => [...prev, newCat]);
+        const nextCats = [...categories, newCat];
+        setCategories(nextCats);
+        onCategoriesUpdated?.(nextCats);
 
         // Clear input form
         if (level === 1) {
@@ -333,10 +337,26 @@ export const CategoryManager: React.FC<CategoryManagerProps> = ({ currentRole = 
       });
       if (res.ok) {
         const updatedCat = await res.json();
-        setCategories(prev => prev.map(c => c.id === updatedCat.id ? { ...c, ...updatedCat } : c));
+        const nextCats = categories.map(c =>
+          c.id === updatedCat.id
+            ? {
+                ...c,
+                name: updatedCat.name,
+                level: updatedCat.level ?? c.level,
+                parentId: updatedCat.parentId ?? c.parentId,
+                specSchema: updatedCat.specSchema ?? c.specSchema,
+              }
+            : c
+        );
+        setCategories(nextCats);
+        onCategoriesUpdated?.(nextCats);
+        onCategoryRenamed?.();
+        const affectedCount = Number(updatedCat.updatedProductsCount || 0);
         showAlert(
           'Kategori Diperbarui',
-          `"${updatedCat.name}" berhasil diperbarui`,
+          affectedCount > 0
+            ? `"${updatedCat.name}" berhasil diperbarui (${affectedCount} SKU produk ikut disinkronkan).`
+            : `"${updatedCat.name}" berhasil diperbarui`,
           'success'
         );
       } else {
@@ -370,7 +390,9 @@ export const CategoryManager: React.FC<CategoryManagerProps> = ({ currentRole = 
       if (res.ok) {
         const data = await res.json();
         const deletedIds = data.deletedIds || [categoryToDelete.id];
-        setCategories(prev => prev.filter(c => !deletedIds.includes(c.id)));
+        const nextCats = categories.filter(c => !deletedIds.includes(c.id));
+        setCategories(nextCats);
+        onCategoriesUpdated?.(nextCats);
         setDeleteModalOpen(false);
 
         showAlert(

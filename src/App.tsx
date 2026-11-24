@@ -905,7 +905,6 @@ export default function App() {
     ownerEmail?: string;
     ownerRole?: string;
     description: string;
-    category: string;
     businessType?: 'B2B' | 'Retail';
     status: 'Aktif' | 'Nonaktif';
     createdAt: string;
@@ -1703,7 +1702,6 @@ export default function App() {
     logo: '',
     ownerId: '',
     description: '',
-    category: 'Umum',
     businessType: 'B2B' as 'B2B' | 'Retail',
     status: 'Aktif' as 'Aktif' | 'Nonaktif'
   });
@@ -2163,12 +2161,6 @@ export default function App() {
   };
 
   const userRolesList = [...ALL_ROLES];
-
-  const brandCategoriesList = React.useMemo(() => {
-    const fromCats = categories.filter(c => c.level === 1).map(c => c.name);
-    const fromBrands = brands.map(b => b.category).filter(Boolean) as string[];
-    return Array.from(new Set([...fromCats, ...fromBrands, 'Umum']));
-  }, [categories, brands]);
 
   const presetUserAvatars = [
     { label: 'Kalingga Jeandy (Super Admin)', url: '/assets/avatars/user_kalingga.svg' },
@@ -2927,7 +2919,6 @@ export default function App() {
       logo: '',
       ownerId: '', // Default kosong: Penanggung Jawab bersifat opsional / bisa diatur nanti
       description: '',
-      category: categories.length > 0 ? categories[0].name : 'Umum',
       businessType: 'B2B',
       status: 'Aktif'
     });
@@ -2956,7 +2947,6 @@ export default function App() {
       logo: brand.logo || '',
       ownerId: targetOwnerId,
       description: brand.description || '',
-      category: brand.category || (categories.length > 0 ? categories[0].name : 'Umum'),
       businessType: brand.businessType || 'B2B',
       status: brand.status
     });
@@ -2992,7 +2982,6 @@ export default function App() {
       ownerEmail: owner?.email,
       ownerRole: owner?.role,
       description: brandForm.description.trim() || '',
-      category: brandForm.category || 'Umum',
       businessType: resolvedBusinessType,
       status: brandForm.status,
       createdAt: new Date().toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' })
@@ -3035,7 +3024,6 @@ export default function App() {
       ownerEmail: owner?.email,
       ownerRole: owner?.role,
       description: brandForm.description.trim(),
-      category: brandForm.category,
       businessType: resolvedBusinessType,
       status: brandForm.status
     };
@@ -5170,8 +5158,7 @@ export default function App() {
       const matchSearch = !q || 
         b.name.toLowerCase().includes(q) ||
         b.ownerName.toLowerCase().includes(q) ||
-        (b.description && b.description.toLowerCase().includes(q)) ||
-        (b.category && b.category.toLowerCase().includes(q));
+        (b.description && b.description.toLowerCase().includes(q));
       
       const matchStatus = brandFilterStatus === 'all' || b.status === brandFilterStatus;
 
@@ -5209,10 +5196,6 @@ export default function App() {
     const start = (brandPage - 1) * brandPerPage;
     return filteredBrands.slice(start, start + brandPerPage);
   }, [filteredBrands, brandPage, brandPerPage]);
-
-  const availableCategories = React.useMemo(() => {
-    return Array.from(new Set(brands.map(b => b.category))).filter(Boolean);
-  }, [brands]);
 
 
   // Memoized calculations for Users Table (Top level to adhere to React Hook rules)
@@ -6057,13 +6040,16 @@ export default function App() {
                               onError={(e) => {
                                 const el = e.currentTarget;
                                 el.onerror = null;
-                                el.src = getBrandInitialsLogo(brand.name);
+                                el.src = getBrandInitialsLogo(brand.name, brand.id || brand.name);
                               }}
                               className="w-10 h-10 rounded-xl object-contain p-0.5 bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 flex-shrink-0 group-hover:border-[#c28e62] transition-colors" 
                             />
                           ) : (
-                            <div className="w-10 h-10 rounded-xl bg-[#c28e62] text-white flex items-center justify-center font-bold text-sm flex-shrink-0">
-                              {brand.name.slice(0, 2).toUpperCase()}
+                            <div
+                              className="w-10 h-10 rounded-xl text-white flex items-center justify-center font-bold text-sm flex-shrink-0"
+                              style={{ backgroundColor: getAvatarColorCss(brand.id || brand.name) }}
+                            >
+                              {getInitials(brand.name, 'B')}
                             </div>
                           )}
                           <div className="flex flex-col items-start min-w-0">
@@ -8141,7 +8127,19 @@ export default function App() {
         ) : activeMenu === 'brand' ? (
           renderBrandContent()
         ) : activeMenu === 'category' ? (
-          <CategoryManager currentRole={currentRole} canManage={canManageCategories} onAlert={triggerAlert} onCategoriesUpdated={(updatedCats) => setCategories(updatedCats)} />
+          <CategoryManager
+            currentRole={currentRole}
+            canManage={canManageCategories}
+            onAlert={triggerAlert}
+            onCategoriesUpdated={(updatedCats) => setCategories(updatedCats)}
+            onCategoryRenamed={() => {
+              api.getProducts()
+                .then((freshProducts) => {
+                  if (Array.isArray(freshProducts)) setProducts(freshProducts);
+                })
+                .catch(() => {});
+            }}
+          />
         ) : activeMenu === 'sku' ? (
           renderSkuContent()
         ) : activeMenu === 'users' ? (
@@ -11216,24 +11214,27 @@ export default function App() {
                                   }}
                                   className="p-2.5 sm:p-3 bg-slate-50 dark:bg-zinc-800/50 rounded-2xl border border-slate-200/80 dark:border-zinc-800 flex items-center gap-2.5 hover:border-[#c28e62] dark:hover:border-[#c28e62] hover:bg-white dark:hover:bg-zinc-800/80 transition-all cursor-pointer group shadow-2xs"
                                 >
-                                  <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-white dark:bg-zinc-800 border border-slate-200/80 dark:border-zinc-700/80 p-1 flex items-center justify-center shrink-0 shadow-2xs group-hover:scale-105 transition-transform">
                                     {b.logo ? (
-                                      <img 
-                                        src={b.name.toLowerCase() === 'sumas' && (!b.logo || b.logo.includes('541888946425') || b.logo.includes('logo_vertikal')) ? '/assets/brand/logo_horizontal.svg' : b.logo} 
-                                        alt={b.name} 
-                                        onError={(e) => {
-                                          const el = e.currentTarget;
-                                          el.onerror = null;
-                                          el.src = getBrandInitialsLogo(b.name);
-                                        }}
-                                        className="w-full h-full object-contain" 
-                                      />
+                                      <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-white dark:bg-zinc-800 border border-slate-200/80 dark:border-zinc-700/80 p-1 flex items-center justify-center shrink-0 shadow-2xs group-hover:scale-105 transition-transform">
+                                        <img 
+                                          src={b.name.toLowerCase() === 'sumas' && (!b.logo || b.logo.includes('541888946425') || b.logo.includes('logo_vertikal')) ? '/assets/brand/logo_horizontal.svg' : b.logo} 
+                                          alt={b.name} 
+                                          onError={(e) => {
+                                            const el = e.currentTarget;
+                                            el.onerror = null;
+                                            el.src = getBrandInitialsLogo(b.name, b.id || b.name);
+                                          }}
+                                          className="w-full h-full object-contain" 
+                                        />
+                                      </div>
                                     ) : (
-                                      <span className="font-bold text-[11px] text-[#c28e62]">
-                                        {b.name.slice(0, 2).toUpperCase()}
-                                      </span>
+                                      <div
+                                        className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl text-white flex items-center justify-center shrink-0 shadow-2xs group-hover:scale-105 transition-transform font-bold text-[11px]"
+                                        style={{ backgroundColor: getAvatarColorCss(b.id || b.name) }}
+                                      >
+                                        {getInitials(b.name, 'B')}
+                                      </div>
                                     )}
-                                  </div>
                                   <span className="font-semibold text-xs text-slate-800 dark:text-zinc-200 truncate group-hover:text-[#c28e62] transition-colors">
                                     {b.name}
                                   </span>
@@ -11263,24 +11264,27 @@ export default function App() {
                                       }}
                                       className="p-2.5 sm:p-3 bg-slate-50 dark:bg-zinc-800/50 rounded-2xl border border-slate-200/80 dark:border-zinc-800 flex items-center gap-2.5 hover:border-[#c28e62] dark:hover:border-[#c28e62] hover:bg-white dark:hover:bg-zinc-800/80 transition-all cursor-pointer group shadow-2xs"
                                     >
-                                      <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-white dark:bg-zinc-800 border border-slate-200/80 dark:border-zinc-700/80 p-1 flex items-center justify-center shrink-0 shadow-2xs group-hover:scale-105 transition-transform">
                                         {b.logo ? (
-                                          <img 
-                                            src={b.name.toLowerCase() === 'sumas' && (!b.logo || b.logo.includes('541888946425') || b.logo.includes('logo_vertikal')) ? '/assets/brand/logo_horizontal.svg' : b.logo} 
-                                            alt={b.name} 
-                                            onError={(e) => {
-                                              const el = e.currentTarget;
-                                              el.onerror = null;
-                                              el.src = getBrandInitialsLogo(b.name);
-                                            }}
-                                            className="w-full h-full object-contain" 
-                                          />
+                                          <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl bg-white dark:bg-zinc-800 border border-slate-200/80 dark:border-zinc-700/80 p-1 flex items-center justify-center shrink-0 shadow-2xs group-hover:scale-105 transition-transform">
+                                            <img 
+                                              src={b.name.toLowerCase() === 'sumas' && (!b.logo || b.logo.includes('541888946425') || b.logo.includes('logo_vertikal')) ? '/assets/brand/logo_horizontal.svg' : b.logo} 
+                                              alt={b.name} 
+                                              onError={(e) => {
+                                                const el = e.currentTarget;
+                                                el.onerror = null;
+                                                el.src = getBrandInitialsLogo(b.name, b.id || b.name);
+                                              }}
+                                              className="w-full h-full object-contain" 
+                                            />
+                                          </div>
                                         ) : (
-                                          <span className="font-bold text-[11px] text-[#c28e62]">
-                                            {b.name.slice(0, 2).toUpperCase()}
-                                          </span>
+                                          <div
+                                            className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl text-white flex items-center justify-center shrink-0 shadow-2xs group-hover:scale-105 transition-transform font-bold text-[11px]"
+                                            style={{ backgroundColor: getAvatarColorCss(b.id || b.name) }}
+                                          >
+                                            {getInitials(b.name, 'B')}
+                                          </div>
                                         )}
-                                      </div>
                                       <span className="font-semibold text-xs text-slate-800 dark:text-zinc-200 truncate group-hover:text-[#c28e62] transition-colors">
                                         {b.name}
                                       </span>
@@ -11789,13 +11793,16 @@ export default function App() {
                                 onError={(e) => {
                                   const el = e.currentTarget;
                                   el.onerror = null;
-                                  el.src = getBrandInitialsLogo(brandToView.name);
+                                  el.src = getBrandInitialsLogo(brandToView.name, brandToView.id || brandToView.name);
                                 }}
                                 className="w-full h-full object-contain" 
                               />
                             ) : (
-                              <div className="w-full h-full rounded-xl bg-slate-100 dark:bg-zinc-700 flex items-center justify-center font-bold text-3xl text-[#c28e62]">
-                                {brandToView.name.slice(0, 2).toUpperCase()}
+                              <div
+                                className="w-full h-full rounded-xl flex items-center justify-center font-bold text-3xl text-white"
+                                style={{ backgroundColor: getAvatarColorCss(brandToView.id || brandToView.name) }}
+                              >
+                                {getInitials(brandToView.name, 'B')}
                               </div>
                             )}
                           </div>
@@ -12534,7 +12541,6 @@ export default function App() {
                       ...prev,
                       brandId: bId,
                       brandName: b ? b.name : prev.brandName,
-                      category: b?.category || prev.category,
                     }));
                   }}
                   placeholder="Pilih Brand / Merk"
@@ -12543,8 +12549,7 @@ export default function App() {
                     .map(b => ({
                       value: b.id,
                       label: b.name,
-                      sublabel: b.category || undefined,
-                      avatar: b.logo || getInitialsAvatar(b.name),
+                      avatar: b.logo || getInitialsAvatar(b.name, b.id || b.name),
                     }))}
                 />
                 <p className="text-[11px] text-slate-400 dark:text-zinc-500 mt-1">

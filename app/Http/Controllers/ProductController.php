@@ -53,7 +53,7 @@ class ProductController extends Controller
         }
 
         $brandRow = DB::table('brands')
-            ->select(['id', 'name', 'logo', 'ownerId', 'category', 'status', 'description'])
+            ->select(['id', 'name', 'logo', 'ownerId', 'status', 'description'])
             ->where(function ($q) use ($prod) {
                 if ($prod->brandId) {
                     $q->where('id', $prod->brandId)->orWhereRaw('LOWER(name) = LOWER(?)', [$prod->brandName]);
@@ -238,7 +238,7 @@ class ProductController extends Controller
         $createdAt = SecurityHardeningService::sanitizeStringInput($p['createdAt'] ?? '', 80) ?: RbacService::formatIndonesianTimestamp();
         $skuCode = SecurityHardeningService::sanitizeStringInput($p['skuCode'] ?? '', 80)
             ?: ('SKU-' . substr((string) (int) round(microtime(true) * 1000), -4));
-        $cleanCategory = SecurityHardeningService::sanitizeStringInput($p['category'] ?? '', 160) ?: 'Umum';
+        $cleanCategory = SecurityHardeningService::sanitizeStringInput($p['category'] ?? '', 400) ?: 'Umum';
         $cleanDesc = !empty($p['description']) ? SecurityHardeningService::sanitizeStringInput($p['description'], 1500) : null;
         $isB2B = !empty($p['isB2B']) ? 1 : 0;
 
@@ -311,7 +311,7 @@ class ProductController extends Controller
         $skuCode = array_key_exists('skuCode', $p)
             ? SecurityHardeningService::sanitizeStringInput($p['skuCode'], 80)
             : ($existing->skuCode ?: ('SKU-' . strtoupper($decodedId)));
-        $category = array_key_exists('category', $p) ? SecurityHardeningService::sanitizeStringInput($p['category'], 160) : $existing->category;
+        $category = array_key_exists('category', $p) ? SecurityHardeningService::sanitizeStringInput($p['category'], 400) : $existing->category;
         $isB2B = array_key_exists('isB2B', $p) ? (!empty($p['isB2B']) ? 1 : 0) : (int) $existing->isB2B;
         $description = array_key_exists('description', $p)
             ? (!empty($p['description']) ? SecurityHardeningService::sanitizeStringInput($p['description'], 1500) : null)

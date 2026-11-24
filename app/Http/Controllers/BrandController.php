@@ -82,7 +82,6 @@ class BrandController extends Controller
         $businessType = ($b['businessType'] ?? '') === 'B2B' ? 'B2B' : 'Retail';
         $safeStatus = ($b['status'] ?? '') === 'Nonaktif' ? 'Nonaktif' : 'Aktif';
         $safeDesc = SecurityHardeningService::sanitizeStringInput($b['description'] ?? '', 1000);
-        $safeCat = SecurityHardeningService::sanitizeStringInput($b['category'] ?? '', 120) ?: 'Umum';
         $safeCreatedAt = SecurityHardeningService::sanitizeStringInput($b['createdAt'] ?? '', 80) ?: RbacService::formatIndonesianTimestamp();
 
         DB::table('brands')->insert([
@@ -91,7 +90,6 @@ class BrandController extends Controller
             'logo' => $logoCheck['value'],
             'ownerId' => $finalOwnerId,
             'description' => $safeDesc,
-            'category' => $safeCat,
             'businessType' => $businessType,
             'status' => $safeStatus,
             'createdAt' => $safeCreatedAt,
@@ -106,7 +104,6 @@ class BrandController extends Controller
             'ownerEmail' => $ownerEmail,
             'ownerRole' => $ownerRole,
             'description' => $safeDesc,
-            'category' => $safeCat,
             'businessType' => $businessType,
             'status' => $safeStatus,
             'createdAt' => $safeCreatedAt,
@@ -169,7 +166,6 @@ class BrandController extends Controller
             'logo' => $nextLogo,
             'ownerId' => $targetOwnerId,
             'description' => array_key_exists('description', $b) ? SecurityHardeningService::sanitizeStringInput($b['description'], 1000) : $existing->description,
-            'category' => array_key_exists('category', $b) ? SecurityHardeningService::sanitizeStringInput($b['category'], 120) : $existing->category,
             'businessType' => array_key_exists('businessType', $b) ? (($b['businessType'] === 'B2B') ? 'B2B' : 'Retail') : ($existing->businessType ?: 'Retail'),
             'status' => array_key_exists('status', $b) ? (($b['status'] === 'Nonaktif') ? 'Nonaktif' : 'Aktif') : $existing->status,
         ];
