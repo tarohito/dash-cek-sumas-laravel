@@ -273,94 +273,117 @@ export const TagStickerPreview: React.FC<TagStickerPreviewProps> = ({
                 </div>
               )}
 
-              {layer.type === 'brand' && (
-                <span
-                  className="whitespace-nowrap leading-none"
-                  style={{
-                    fontFamily: getCssFontFamily(layer.fontFamily),
-                    fontWeight: layer.fontWeight === 'bold' ? 700 : 400,
-                    fontSize: `${Math.max(5, layer.fontSizePt * PT_TO_MM * pxPerMm)}px`,
-                    color: layer.color,
-                    textAlign: layer.align,
-                  }}
-                >
-                  {layer.uppercase
-                    ? String(effectiveBatch.brand || 'SUMAS').slice(0, 24).toUpperCase()
-                    : String(effectiveBatch.brand || 'SUMAS').slice(0, 24)}
-                </span>
-              )}
+              {layer.type === 'brand' && (() => {
+                const lsPx = (layer.letterSpacingPt || 0) * PT_TO_MM * pxPerMm;
+                return (
+                  <span
+                    className="whitespace-nowrap leading-none"
+                    style={{
+                      fontFamily: getCssFontFamily(layer.fontFamily),
+                      fontWeight: layer.fontWeight === 'bold' ? 700 : 400,
+                      fontSize: `${Math.max(5, layer.fontSizePt * PT_TO_MM * pxPerMm)}px`,
+                      letterSpacing: lsPx ? `${lsPx}px` : undefined,
+                      marginRight: lsPx ? `${-lsPx}px` : undefined,
+                      color: layer.color,
+                      textAlign: layer.align,
+                    }}
+                  >
+                    {layer.uppercase
+                      ? String(effectiveBatch.brand || 'SUMAS').slice(0, 24).toUpperCase()
+                      : String(effectiveBatch.brand || 'SUMAS').slice(0, 24)}
+                  </span>
+                );
+              })()}
 
-              {layer.type === 'tagId' && (
-                <span
-                  className="whitespace-nowrap leading-none"
-                  style={{
-                    fontFamily: getCssFontFamily(layer.fontFamily),
-                    fontWeight: layer.fontWeight === 'bold' ? 700 : 400,
-                    fontSize: `${Math.max(5, layer.fontSizePt * PT_TO_MM * pxPerMm)}px`,
-                    color: layer.color,
-                    textAlign: layer.align,
-                  }}
-                >
-                  {`${layer.prefix ?? ''}${effectiveTag.tagNumber}`}
-                </span>
-              )}
+              {layer.type === 'tagId' && (() => {
+                const lsPx = (layer.letterSpacingPt || 0) * PT_TO_MM * pxPerMm;
+                return (
+                  <span
+                    className="whitespace-nowrap leading-none"
+                    style={{
+                      fontFamily: getCssFontFamily(layer.fontFamily),
+                      fontWeight: layer.fontWeight === 'bold' ? 700 : 400,
+                      fontSize: `${Math.max(5, layer.fontSizePt * PT_TO_MM * pxPerMm)}px`,
+                      letterSpacing: lsPx ? `${lsPx}px` : undefined,
+                      marginRight: lsPx ? `${-lsPx}px` : undefined,
+                      color: layer.color,
+                      textAlign: layer.align,
+                    }}
+                  >
+                    {`${layer.prefix ?? ''}${effectiveTag.tagNumber}`}
+                  </span>
+                );
+              })()}
 
-              {layer.type === 'text' && (
-                <span
-                  className="whitespace-nowrap leading-none"
-                  style={{
-                    fontFamily: getCssFontFamily(layer.fontFamily),
-                    fontWeight: layer.fontWeight === 'bold' ? 700 : 400,
-                    fontSize: `${Math.max(5, layer.fontSizePt * PT_TO_MM * pxPerMm)}px`,
-                    color: layer.color,
-                    textAlign: layer.align,
-                  }}
-                >
-                  {resolveDynamicText(layer.content, {
-                    brand: effectiveBatch.brand,
-                    sku: effectiveBatch.sku,
-                    batchId: effectiveBatch.batchId,
-                    tagNumber: effectiveTag.tagNumber,
-                    pin: effectiveTag.pin,
-                  })}
-                </span>
-              )}
+              {layer.type === 'text' && (() => {
+                const lsPx = (layer.letterSpacingPt || 0) * PT_TO_MM * pxPerMm;
+                return (
+                  <span
+                    className="whitespace-nowrap leading-none"
+                    style={{
+                      fontFamily: getCssFontFamily(layer.fontFamily),
+                      fontWeight: layer.fontWeight === 'bold' ? 700 : 400,
+                      fontSize: `${Math.max(5, layer.fontSizePt * PT_TO_MM * pxPerMm)}px`,
+                      letterSpacing: lsPx ? `${lsPx}px` : undefined,
+                      marginRight: lsPx ? `${-lsPx}px` : undefined,
+                      color: layer.color,
+                      textAlign: layer.align,
+                    }}
+                  >
+                    {resolveDynamicText(layer.content, {
+                      brand: effectiveBatch.brand,
+                      sku: effectiveBatch.sku,
+                      batchId: effectiveBatch.batchId,
+                      tagNumber: effectiveTag.tagNumber,
+                      pin: effectiveTag.pin,
+                    })}
+                  </span>
+                );
+              })()}
 
-              {layer.type === 'pin' && (
-                <div
-                  className="w-full flex flex-col justify-center leading-none"
-                  style={{
-                    alignItems:
-                      layer.align === 'left'
-                        ? 'flex-start'
-                        : layer.align === 'right'
-                          ? 'flex-end'
-                          : 'center',
-                    fontFamily: getCssFontFamily(layer.fontFamily),
-                    fontWeight: layer.fontWeight === 'bold' ? 700 : 400,
-                    fontSize: `${Math.max(6, layer.fontSizePt * PT_TO_MM * pxPerMm)}px`,
-                    color: layer.color,
-                  }}
-                >
-                  {layer.pinMode === '2-line' && rawPin.length > 4 ? (
-                    <>
-                      <span>{rawPin.slice(0, pinHalf)}</span>
-                      <span
+              {layer.type === 'pin' && (() => {
+                const lsPx = (layer.letterSpacingPt || 0) * PT_TO_MM * pxPerMm;
+                const gapPx = Math.max(1.5, layer.lineGapMm || 4.0) * pxPerMm;
+                const commonTextStyle: React.CSSProperties = {
+                  fontFamily: getCssFontFamily(layer.fontFamily),
+                  fontWeight: layer.fontWeight === 'bold' ? 700 : 400,
+                  fontSize: `${Math.max(6, layer.fontSizePt * PT_TO_MM * pxPerMm)}px`,
+                  letterSpacing: lsPx ? `${lsPx}px` : undefined,
+                  color: layer.color,
+                };
+                const spanAdjustStyle: React.CSSProperties = lsPx ? { marginRight: `${-lsPx}px` } : {};
+                if (layer.pinMode === '2-line' && rawPin.length > 4) {
+                  return (
+                    <div className="relative w-full h-full leading-none" style={commonTextStyle}>
+                      <div
+                        className="absolute inset-x-0 flex whitespace-nowrap"
                         style={{
-                          marginTop: `${Math.max(
-                            0,
-                            (layer.lineGapMm - layer.fontSizePt * PT_TO_MM * 0.72) * pxPerMm
-                          )}px`,
+                          top: '50%',
+                          transform: `translateY(calc(-50% - ${gapPx / 2}px))`,
+                          justifyContent: justify,
                         }}
                       >
-                        {rawPin.slice(pinHalf)}
-                      </span>
-                    </>
-                  ) : (
-                    <span>{rawPin}</span>
-                  )}
-                </div>
-              )}
+                        <span style={spanAdjustStyle}>{rawPin.slice(0, pinHalf)}</span>
+                      </div>
+                      <div
+                        className="absolute inset-x-0 flex whitespace-nowrap"
+                        style={{
+                          top: '50%',
+                          transform: `translateY(calc(-50% + ${gapPx / 2}px))`,
+                          justifyContent: justify,
+                        }}
+                      >
+                        <span style={spanAdjustStyle}>{rawPin.slice(pinHalf)}</span>
+                      </div>
+                    </div>
+                  );
+                }
+                return (
+                  <span className="whitespace-nowrap leading-none" style={{ ...commonTextStyle, ...spanAdjustStyle }}>
+                    {rawPin}
+                  </span>
+                );
+              })()}
 
               {layer.type === 'qr' && (
                 <div className="w-full h-full flex items-center justify-center overflow-hidden">

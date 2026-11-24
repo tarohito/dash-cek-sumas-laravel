@@ -356,7 +356,8 @@ function drawTextLayerInPdf(
   fontWeight: 'bold' | 'normal',
   fontSizePt: number,
   colorHex: string,
-  yOffsetMm = 0
+  yOffsetMm = 0,
+  letterSpacingPt = 0
 ): void {
   if (!text) return;
   setDocFont(doc, fontFamily, fontWeight);
@@ -364,18 +365,85 @@ function drawTextLayerInPdf(
   const [r, g, b] = hexToRgb(colorHex, [15, 23, 42]);
   doc.setTextColor(r, g, b);
 
+  const charSpaceMm = (Number(letterSpacingPt) || 0) * (25.4 / 72);
+  const baseWidthMm = doc.getTextWidth(text);
+  const renderedWidthMm = Math.max(0, baseWidthMm + Math.max(0, text.length - 1) * charSpaceMm);
+
   const cx = layerX + layerW / 2;
   const cy = layerY + layerH / 2;
   const anchorX =
     align === 'left' ? layerX : align === 'right' ? layerX + layerW : cx;
+  const offsetX =
+    align === 'left' ? 0 : align === 'right' ? -renderedWidthMm : -renderedWidthMm / 2;
+  const startUnrotatedX = anchorX + offsetX;
   const anchorY = cy + yOffsetMm;
-  const pos = rotatePointCW(anchorX, anchorY, cx, cy, rotation);
+  const pos = rotatePointCW(startUnrotatedX, anchorY, cx, cy, rotation);
 
   doc.text(text, pos.x, pos.y, {
-    align,
     baseline: 'middle',
+    charSpace: charSpaceMm,
     ...(rotation ? { angle: -rotation } : {}),
   });
+}
+
+function drawRotatedRectPath(
+  doc: jsPDF,
+  lx: number,
+  ly: number,
+  lw: number,
+  lh: number,
+  radius: number,
+  rot: number,
+  style: 'F' | 'S' | 'FD'
+): void {
+  const cx = lx + lw / 2;
+  const cy = ly + lh / 2;
+  const pt = (x: number, y: number): [number, number] => {
+    const p = rotatePointCW(x, y, cx, cy, rot);
+    return [p.x, p.y];
+  };
+  const ops: Array<{ op: 'm' | 'l' | 'c' | 'h'; c?: number[] }> = [];
+
+  if (radius <= 0) {
+    const p1 = pt(lx, ly);
+    const p2 = pt(lx + lw, ly);
+    const p3 = pt(lx + lw, ly + lh);
+    const p4 = pt(lx, ly + lh);
+    ops.push(
+      { op: 'm', c: p1 },
+      { op: 'l', c: p2 },
+      { op: 'l', c: p3 },
+      { op: 'l', c: p4 },
+      { op: 'h' }
+    );
+  } else {
+    const r = Math.min(radius, Math.min(lw, lh) / 2);
+    const k = 0.5522847498 * r;
+    const x0 = lx;
+    const y0 = ly;
+    const x1 = lx + lw;
+    const y1 = ly + lh;
+
+    ops.push({ op: 'm', c: pt(x0 + r, y0) });
+    ops.push({ op: 'l', c: pt(x1 - r, y0) });
+    ops.push({ op: 'c', c: [...pt(x1 - r + k, y0), ...pt(x1, y0 + r - k), ...pt(x1, y0 + r)] });
+    ops.push({ op: 'l', c: pt(x1, y1 - r) });
+    ops.push({ op: 'c', c: [...pt(x1, y1 - r + k), ...pt(x1 - r + k, y1), ...pt(x1 - r, y1)] });
+    ops.push({ op: 'l', c: pt(x0 + r, y1) });
+    ops.push({ op: 'c', c: [...pt(x0 + r - k, y1), ...pt(x0, y1 - r + k), ...pt(x0, y1 - r)] });
+    ops.push({ op: 'l', c: pt(x0, y0 + r) });
+    ops.push({ op: 'c', c: [...pt(x0, y0 + r - k), ...pt(x0 + r - k, y0), ...pt(x0 + r, y0)] });
+    ops.push({ op: 'h' });
+  }
+
+  doc.path(ops);
+  if (style === 'FD') {
+    doc.fillStroke();
+  } else if (style === 'F') {
+    doc.fill();
+  } else {
+    doc.stroke();
+  }
 }
 
 function renderLayerInPdf(
@@ -420,7 +488,9 @@ function renderLayerInPdf(
           doc.setLineWidth(strokeW);
         }
         const radius = Math.min(layer.cornerRadiusMm || 0, Math.min(lw, lh) / 2);
-        if (radius > 0) {
+        if (rot) {
+          drawRotatedRectPath(doc, lx, ly, lw, lh, radius, rot, style);
+        } else if (radius > 0) {
           doc.roundedRect(lx, ly, lw, lh, radius, radius, style);
         } else {
           doc.rect(lx, ly, lw, lh, style);
@@ -443,9 +513,11 @@ function renderLayerInPdf(
       doc.setFont('times', 'bold');
       doc.setFontSize(fontPt);
       doc.setTextColor(er, eg, eb);
-      doc.text(letter, cx, cy, {
-        align: 'center',
+      const letterW = doc.getTextWidth(letter);
+      const letterPos = rotatePointCW(cx - letterW / 2, cy, cx, cy, rot);
+      doc.text(letter, letterPos.x, letterPos.y, {
         baseline: 'middle',
+        charSpace: 0,
         ...(rot ? { angle: -rot } : {}),
       });
       break;
@@ -466,7 +538,9 @@ function renderLayerInPdf(
         layer.fontFamily,
         layer.fontWeight,
         layer.fontSizePt,
-        layer.color
+        layer.color,
+        0,
+        layer.letterSpacingPt || 0
       );
       break;
     }
@@ -485,7 +559,9 @@ function renderLayerInPdf(
         layer.fontFamily,
         layer.fontWeight,
         layer.fontSizePt,
-        layer.color
+        layer.color,
+        0,
+        layer.letterSpacingPt || 0
       );
       break;
     }
@@ -510,7 +586,9 @@ function renderLayerInPdf(
         layer.fontFamily,
         layer.fontWeight,
         layer.fontSizePt,
-        layer.color
+        layer.color,
+        0,
+        layer.letterSpacingPt || 0
       );
       break;
     }
@@ -537,7 +615,8 @@ function renderLayerInPdf(
           layer.fontWeight,
           layer.fontSizePt,
           layer.color,
-          -gap / 2
+          -gap / 2,
+          layer.letterSpacingPt || 0
         );
         drawTextLayerInPdf(
           doc,
@@ -552,7 +631,8 @@ function renderLayerInPdf(
           layer.fontWeight,
           layer.fontSizePt,
           layer.color,
-          gap / 2
+          gap / 2,
+          layer.letterSpacingPt || 0
         );
       } else {
         drawTextLayerInPdf(
@@ -567,7 +647,9 @@ function renderLayerInPdf(
           layer.fontFamily,
           layer.fontWeight,
           layer.fontSizePt,
-          layer.color
+          layer.color,
+          0,
+          layer.letterSpacingPt || 0
         );
       }
       break;

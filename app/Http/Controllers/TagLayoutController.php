@@ -152,6 +152,7 @@ class TagLayoutController extends Controller
             $rawAlign = (string) ($layer['align'] ?? '');
             $align = in_array($rawAlign, $allowedAligns, true) ? $rawAlign : 'center';
             $weight = ($layer['fontWeight'] ?? 'bold') === 'normal' ? 'normal' : 'bold';
+            $letterSpacingPt = round(max(-2, min(30, (float) ($layer['letterSpacingPt'] ?? 0))), 2);
 
             switch ($type) {
                 case 'qr':
@@ -170,8 +171,9 @@ class TagLayoutController extends Controller
                         'pinMode' => ($layer['pinMode'] ?? '2-line') === '1-line' ? '1-line' : '2-line',
                         'lineGapMm' => max(1.5, min(20, (float) ($layer['lineGapMm'] ?? 4.0))),
                         'fontFamily' => $font,
-                        'fontSizePt' => max(2, min(72, (float) ($layer['fontSizePt'] ?? 14))),
+                        'fontSizePt' => max(2, min(300, (float) ($layer['fontSizePt'] ?? 14))),
                         'fontWeight' => $weight,
+                        'letterSpacingPt' => $letterSpacingPt,
                         'color' => $this->sanitizeHexColor($layer['color'] ?? '#0f172a', '#0f172a'),
                         'align' => $align,
                     ]);
@@ -181,8 +183,9 @@ class TagLayoutController extends Controller
                     $cleanLayers[] = array_merge($base, [
                         'prefix' => SecurityHardeningService::sanitizeStringInput($layer['prefix'] ?? '', 24),
                         'fontFamily' => $font,
-                        'fontSizePt' => max(2, min(72, (float) ($layer['fontSizePt'] ?? 5.5))),
+                        'fontSizePt' => max(2, min(300, (float) ($layer['fontSizePt'] ?? 5.5))),
                         'fontWeight' => $weight,
+                        'letterSpacingPt' => $letterSpacingPt,
                         'color' => $this->sanitizeHexColor($layer['color'] ?? '#475569', '#475569'),
                         'align' => $align,
                     ]);
@@ -191,8 +194,9 @@ class TagLayoutController extends Controller
                 case 'brand':
                     $cleanLayers[] = array_merge($base, [
                         'fontFamily' => $font,
-                        'fontSizePt' => max(2, min(72, (float) ($layer['fontSizePt'] ?? 6))),
+                        'fontSizePt' => max(2, min(300, (float) ($layer['fontSizePt'] ?? 6))),
                         'fontWeight' => $weight,
+                        'letterSpacingPt' => $letterSpacingPt,
                         'color' => $this->sanitizeHexColor($layer['color'] ?? '#18181b', '#18181b'),
                         'align' => $align,
                         'uppercase' => (bool) ($layer['uppercase'] ?? true),
@@ -221,8 +225,9 @@ class TagLayoutController extends Controller
                     $cleanLayers[] = array_merge($base, [
                         'content' => SecurityHardeningService::sanitizeStringInput($layer['content'] ?? '', 120),
                         'fontFamily' => $font,
-                        'fontSizePt' => max(2, min(72, (float) ($layer['fontSizePt'] ?? 5.5))),
+                        'fontSizePt' => max(2, min(300, (float) ($layer['fontSizePt'] ?? 5.5))),
                         'fontWeight' => $weight,
+                        'letterSpacingPt' => $letterSpacingPt,
                         'color' => $this->sanitizeHexColor($layer['color'] ?? '#0f172a', '#0f172a'),
                         'align' => $align,
                     ]);

@@ -2081,7 +2081,7 @@ export const TagLayoutStudioModal: React.FC<TagLayoutStudioModalProps> = ({
                             className="w-full h-8 px-2.5 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs outline-none focus:border-[#c28e62]"
                           />
                           <div className="flex flex-wrap gap-1">
-                            {['{brand}', '{sku}', '{batchId}', '{tagNumber}'].map((tok) => (
+                            {['{brand}', '{sku}', '{batchId}', '{tagNumber}', '{pin}'].map((tok) => (
                               <button
                                 key={tok}
                                 type="button"
@@ -2146,10 +2146,47 @@ export const TagLayoutStudioModal: React.FC<TagLayoutStudioModalProps> = ({
                             <MmNumberInput
                               step={0.5}
                               min={2}
-                              max={2000}
+                              max={300}
                               fallback={6}
                               value={selectedLayer.fontSizePt}
                               onCommit={(val) => updateSelectedLayer({ fontSizePt: val })}
+                              className="mt-0.5 w-full h-8 px-2 text-center rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs font-mono outline-none focus:border-[#c28e62]"
+                            />
+                          </label>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 items-end">
+                          <div>
+                            <span className="text-[10px] text-slate-500 dark:text-zinc-400">Ketebalan</span>
+                            <div className="mt-0.5 grid grid-cols-2 gap-1">
+                              {(['bold', 'normal'] as const).map((fw) => (
+                                <button
+                                  key={fw}
+                                  type="button"
+                                  onClick={() => updateSelectedLayer({ fontWeight: fw })}
+                                  className={`h-8 rounded-lg border text-[10px] font-bold cursor-pointer ${
+                                    selectedLayer.fontWeight === fw
+                                      ? 'border-[#c28e62] bg-[#c28e62]/10 text-[#c28e62]'
+                                      : 'border-slate-200 dark:border-zinc-700 text-slate-500 dark:text-zinc-400'
+                                  }`}
+                                >
+                                  {fw === 'bold' ? 'Bold' : 'Normal'}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          <label className="block">
+                            <span className="text-[10px] text-slate-500 dark:text-zinc-400 whitespace-nowrap">
+                              Kerenggangan (pt)
+                            </span>
+                            <MmNumberInput
+                              step={0.2}
+                              min={-2}
+                              max={30}
+                              fallback={0}
+                              value={selectedLayer.letterSpacingPt ?? 0}
+                              onCommit={(val) => updateSelectedLayer({ letterSpacingPt: val })}
                               className="mt-0.5 w-full h-8 px-2 text-center rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs font-mono outline-none focus:border-[#c28e62]"
                             />
                           </label>
@@ -2291,8 +2328,20 @@ export const TagLayoutStudioModal: React.FC<TagLayoutStudioModalProps> = ({
                             Garis
                           </button>
                         </div>
+                        {selectedLayer.shapeType !== 'line' && (
+                          <div className="flex items-center justify-between pt-0.5">
+                            <span className="text-xs font-medium text-slate-700 dark:text-zinc-300">
+                              Isi Transparan (Outline Saja)
+                            </span>
+                            <CustomCheckbox
+                              checked={Boolean(selectedLayer.transparentFill)}
+                              onChange={(checked) => updateSelectedLayer({ transparentFill: checked })}
+                              ariaLabel="Isi Transparan (Outline Saja)"
+                            />
+                          </div>
+                        )}
                         <div className="grid grid-cols-2 gap-2">
-                          <label className="block">
+                          <label className={`block ${selectedLayer.transparentFill || selectedLayer.shapeType === 'line' ? 'opacity-45 pointer-events-none' : ''}`}>
                             <span className="text-[10px] text-slate-500 dark:text-zinc-400">Warna Isi</span>
                             <div className="mt-0.5 flex items-center gap-1.5 h-8 px-2 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800">
                               <input
@@ -2685,33 +2734,56 @@ export const TagLayoutStudioModal: React.FC<TagLayoutStudioModalProps> = ({
                     </div>
 
                     {/* Die-Cut Line Options */}
-                    <div className="flex items-center justify-between pt-1">
-                      <span className="text-xs font-medium text-slate-700 dark:text-zinc-300 flex items-center gap-1.5">
-                        <Scissors size={13} className="text-rose-500" /> Garis Potong (Die-Cut)
-                      </span>
-                      <div className="flex items-center gap-2.5">
-                        <input
-                          type="color"
-                          value={draft.sticker.cutLineColor}
-                          onChange={(e) =>
-                            updateDraft((prev) => ({
-                              ...prev,
-                              sticker: { ...prev.sticker, cutLineColor: e.target.value },
-                            }))
-                          }
-                          className="w-5 h-5 rounded cursor-pointer border-0 bg-transparent p-0"
-                        />
-                        <CustomCheckbox
-                          checked={draft.sticker.showCutLine}
-                          onChange={(checked) =>
-                            updateDraft((prev) => ({
-                              ...prev,
-                              sticker: { ...prev.sticker, showCutLine: checked },
-                            }))
-                          }
-                          ariaLabel="Aktifkan Garis Potong Die-Cut"
-                        />
+                    <div className="space-y-2 pt-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-medium text-slate-700 dark:text-zinc-300 flex items-center gap-1.5">
+                          <Scissors size={13} className="text-rose-500" /> Garis Potong (Die-Cut)
+                        </span>
+                        <div className="flex items-center gap-2.5">
+                          <input
+                            type="color"
+                            value={draft.sticker.cutLineColor}
+                            onChange={(e) =>
+                              updateDraft((prev) => ({
+                                ...prev,
+                                sticker: { ...prev.sticker, cutLineColor: e.target.value },
+                              }))
+                            }
+                            className="w-5 h-5 rounded cursor-pointer border-0 bg-transparent p-0"
+                          />
+                          <CustomCheckbox
+                            checked={draft.sticker.showCutLine}
+                            onChange={(checked) =>
+                              updateDraft((prev) => ({
+                                ...prev,
+                                sticker: { ...prev.sticker, showCutLine: checked },
+                              }))
+                            }
+                            ariaLabel="Aktifkan Garis Potong Die-Cut"
+                          />
+                        </div>
                       </div>
+                      {draft.sticker.showCutLine && (
+                        <div className="flex items-center justify-between gap-2 pl-5">
+                          <span className="text-[11px] text-slate-500 dark:text-zinc-400">
+                            Tebal Garis Potong (mm)
+                          </span>
+                          <MmNumberInput
+                            min={0.05}
+                            max={5}
+                            step={0.05}
+                            fallback={0.18}
+                            value={draft.sticker.cutLineWidthMm}
+                            onCommit={(val) =>
+                              updateDraft((prev) => ({
+                                ...prev,
+                                sticker: { ...prev.sticker, cutLineWidthMm: val },
+                              }))
+                            }
+                            className="w-20 h-7 px-2 text-center rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-xs font-mono outline-none focus:border-[#c28e62]"
+                          />
+                        </div>
+                      )}
                     </div>
                   </div>
 

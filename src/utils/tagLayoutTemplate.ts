@@ -39,6 +39,7 @@ export interface TagPinLayer extends TagLayerBase {
   fontFamily: TagFontFamily;
   fontSizePt: number;
   fontWeight: 'bold' | 'normal';
+  letterSpacingPt?: number;
   color: string;
   align: 'left' | 'center' | 'right';
 }
@@ -49,6 +50,7 @@ export interface TagIdLayer extends TagLayerBase {
   fontFamily: TagFontFamily;
   fontSizePt: number;
   fontWeight: 'bold' | 'normal';
+  letterSpacingPt?: number;
   color: string;
   align: 'left' | 'center' | 'right';
 }
@@ -58,6 +60,7 @@ export interface TagBrandLayer extends TagLayerBase {
   fontFamily: TagFontFamily;
   fontSizePt: number;
   fontWeight: 'bold' | 'normal';
+  letterSpacingPt?: number;
   color: string;
   align: 'left' | 'center' | 'right';
   uppercase: boolean;
@@ -75,6 +78,7 @@ export interface TagTextLayer extends TagLayerBase {
   fontFamily: TagFontFamily;
   fontSizePt: number;
   fontWeight: 'bold' | 'normal';
+  letterSpacingPt?: number;
   color: string;
   align: 'left' | 'center' | 'right';
 }
@@ -683,6 +687,7 @@ export function createNewLayer(
         fontFamily: 'KodeMono',
         fontSizePt: 12.0,
         fontWeight: 'bold',
+        letterSpacingPt: 0,
         color: '#0f172a',
         align: 'center',
       };
@@ -702,6 +707,7 @@ export function createNewLayer(
         fontFamily: 'KodeMono',
         fontSizePt: 5.5,
         fontWeight: 'bold',
+        letterSpacingPt: 0,
         color: '#475569',
         align: 'center',
       };
@@ -720,6 +726,7 @@ export function createNewLayer(
         fontFamily: 'times',
         fontSizePt: 6,
         fontWeight: 'bold',
+        letterSpacingPt: 0,
         color: '#18181b',
         align: 'center',
         uppercase: true,
@@ -775,6 +782,7 @@ export function createNewLayer(
         fontFamily: 'helvetica',
         fontSizePt: 5.5,
         fontWeight: 'bold',
+        letterSpacingPt: 0,
         color: '#0f172a',
         align: 'center',
       };
