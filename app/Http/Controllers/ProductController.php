@@ -194,10 +194,26 @@ class ProductController extends Controller
             $totalScanSum += $sr['totalScans'];
         }
 
-        $formattedBatches = $batches->map(function ($row) {
+        $pinFormatByBatch = [];
+        if (count($batchIds) > 0) {
+            $batchPinSamples = DB::table('tags')
+                ->whereIn('batchId', $batchIds)
+                ->select('batchId')
+                ->selectRaw('MAX(pin) as sample_pin')
+                ->groupBy('batchId')
+                ->get();
+            foreach ($batchPinSamples as $bps) {
+                $pinFormatByBatch[$bps->batchId] = preg_match('/[A-Za-z]/', (string) ($bps->sample_pin ?? ''))
+                    ? 'alphanumeric'
+                    : 'numeric';
+            }
+        }
+
+        $formattedBatches = $batches->map(function ($row) use ($pinFormatByBatch) {
             $arr = (array) $row;
             $arr['qty'] = (int) ($arr['qty'] ?? 0);
             $arr['pinLength'] = (int) ($arr['pinLength'] ?? 8);
+            $arr['pinFormat'] = $pinFormatByBatch[$arr['id']] ?? 'alphanumeric';
             $arr['isB2B'] = (bool) ($arr['isB2B'] ?? false);
             $arr['requirePin'] = $arr['requirePin'] === null ? true : (bool) $arr['requirePin'];
             $arr['enableGps'] = $arr['enableGps'] === null ? true : (bool) $arr['enableGps'];

@@ -21,7 +21,7 @@ class BatchController extends Controller
         $scope = $this->brandScope($request);
         $tagCounts = DB::table('tags')
             ->select('batchId')
-            ->selectRaw("COUNT(*) as total_count, SUM(CASE WHEN status = 'Tersedia' THEN 1 ELSE 0 END) as available_count, SUM(CASE WHEN status = 'Telah Digunakan' THEN 1 ELSE 0 END) as used_count")
+            ->selectRaw("COUNT(*) as total_count, SUM(CASE WHEN status = 'Tersedia' THEN 1 ELSE 0 END) as available_count, SUM(CASE WHEN status = 'Telah Digunakan' THEN 1 ELSE 0 END) as used_count, MIN(tagNumber) as sample_tag_number, MAX(pin) as sample_pin")
             ->groupBy('batchId')
             ->get()
             ->keyBy('batchId');
@@ -35,8 +35,15 @@ class BatchController extends Controller
                 continue;
             }
             $tc = $tagCounts->get($row['id']);
+            $samplePin = $tc ? (string) ($tc->sample_pin ?? '') : '';
             $row['qty'] = (int) ($row['qty'] ?? 0);
             $row['pinLength'] = (int) ($row['pinLength'] ?? 8);
+            $row['pinFormat'] = $samplePin !== ''
+                ? (preg_match('/[A-Za-z]/', $samplePin) ? 'alphanumeric' : 'numeric')
+                : 'alphanumeric';
+            $row['sampleTag'] = ($tc && !empty($tc->sample_tag_number))
+                ? ['tagNumber' => (string) $tc->sample_tag_number, 'pin' => $samplePin]
+                : null;
             $row['actualTagCount'] = $tc ? (int) $tc->total_count : 0;
             $row['availableCount'] = $tc ? (int) $tc->available_count : 0;
             $row['usedCount'] = $tc ? (int) $tc->used_count : 0;
@@ -301,6 +308,10 @@ class BatchController extends Controller
             'status' => $safeStatus,
             'qty' => $rawQty,
             'pinLength' => $pinLength,
+            'pinFormat' => $pinFormat,
+            'sampleTag' => isset($tagsToInsert[0])
+                ? ['tagNumber' => $tagsToInsert[0]['tagNumber'], 'pin' => $tagsToInsert[0]['pin']]
+                : null,
             'isB2B' => (bool) $isB2B,
             'redirectUrl' => $redirectUrl,
             'qrType' => $qrType,

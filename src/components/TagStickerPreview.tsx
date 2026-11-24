@@ -67,11 +67,18 @@ export const TagStickerPreview: React.FC<TagStickerPreviewProps> = ({
     redirectUrl: sampleBatch?.redirectUrl || 'https://cek.sumas.id/',
   };
 
+  const batchSampleTag = (sampleBatch as any)?.sampleTag as Partial<TagItem> | undefined;
+  const fallbackPinLength = Math.min(12, Math.max(4, Number((sampleBatch as any)?.pinLength) || 8));
+  const fallbackSamplePin =
+    (sampleBatch as any)?.pinFormat === 'numeric'
+      ? '482910573614'.slice(0, fallbackPinLength)
+      : 'A7K9M2P4B6N8'.slice(0, fallbackPinLength);
+
   const effectiveTag: TagItem = {
     id: sampleTag?.id || 'tag-1',
     batchId: effectiveBatch.batchId,
-    tagNumber: sampleTag?.tagNumber || 'SUM-000128',
-    pin: sampleTag?.pin || '01234567',
+    tagNumber: sampleTag?.tagNumber || batchSampleTag?.tagNumber || 'SUM-000128',
+    pin: sampleTag?.pin || batchSampleTag?.pin || fallbackSamplePin,
   };
 
   const qrLayers = template.layers.filter((l) => l.type === 'qr' && l.visible);
@@ -125,7 +132,7 @@ export const TagStickerPreview: React.FC<TagStickerPreviewProps> = ({
     Math.min(widthPx, heightPx) / 2
   );
 
-  const rawPin = String(effectiveTag.pin || '01234567').replace(/\s+/g, '');
+  const rawPin = String(effectiveTag.pin || fallbackSamplePin).replace(/\s+/g, '');
   const pinHalf = Math.ceil(rawPin.length / 2);
 
   return (

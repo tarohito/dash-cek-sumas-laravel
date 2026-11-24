@@ -342,7 +342,7 @@ function renderLayerInPdf(
     }
 
     case 'pin': {
-      const rawPin = String(tag.pin || '00000000').replace(/\s+/g, '');
+      const rawPin = String(tag.pin || 'A7K9M2P4').replace(/\s+/g, '');
       const half = Math.ceil(rawPin.length / 2);
       const isTwoLines = layer.pinMode === '2-line' && rawPin.length > 4;
 

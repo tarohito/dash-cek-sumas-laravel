@@ -634,7 +634,7 @@ export function resolveDynamicText(
     .replace(/\{sku\}/gi, context.sku || 'SKU-001')
     .replace(/\{batchId\}/gi, context.batchId || 'BATCH-001')
     .replace(/\{tagNumber\}/gi, context.tagNumber || 'SUM-000001')
-    .replace(/\{pin\}/gi, context.pin || '01234567');
+    .replace(/\{pin\}/gi, context.pin || 'A7K9M2P4');
 }
 
 export function createNewLayer(

@@ -8038,7 +8038,7 @@ export default function App() {
                                 </div>
                                 <div className="flex items-center gap-1.5 flex-wrap mt-1">
                                   <span className="px-2 py-0.5 rounded-full bg-zinc-50 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border border-zinc-200 dark:border-zinc-700 text-[10px] font-medium">
-                                    PIN: {batch.pinLength} Digit
+                                    PIN: {batch.pinLength} Digit {batch.pinFormat === 'numeric' ? 'Angka' : batch.pinFormat === 'alphanumeric' ? 'Huruf & Angka' : ''}
                                   </span>
                                   <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium border ${
                                       used === 0 
@@ -13130,7 +13130,7 @@ export default function App() {
                                           </span>
                                         </div>
                                         <div className="text-[11px] text-slate-500 dark:text-zinc-400 mt-1 truncate">
-                                          {b.date} • PIN {b.pinLength} Digit {b.project ? `• ${b.project}` : ''}
+                                          {b.date} • PIN {b.pinLength} Digit {b.pinFormat === 'numeric' ? 'Angka' : b.pinFormat === 'alphanumeric' ? 'Huruf & Angka' : ''}{b.project ? ` • ${b.project}` : ''}
                                         </div>
                                       </div>
                                       <div className="flex items-center gap-2 shrink-0">
@@ -13418,7 +13418,12 @@ export default function App() {
           onDeleteTemplate={handleDeleteTagTemplate}
           onSelectTemplate={handleSelectTagTemplate}
           sampleBatch={batchToDownload || batches[0] || null}
-          sampleTag={currentTags[0] || null}
+          sampleTag={(() => {
+            const targetBatch = batchToDownload || batches[0];
+            if (!targetBatch) return currentTags[0] || null;
+            const matchedCurrent = currentTags.find((t) => t.batchId === targetBatch.id);
+            return matchedCurrent || targetBatch.sampleTag || null;
+          })()}
           onDownloadPdfWithTemplate={
             canDownloadBatch && batchToDownload ? (tpl) => handleDownloadPDF(tpl) : undefined
           }
