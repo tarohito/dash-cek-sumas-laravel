@@ -73,6 +73,10 @@ class BatchController extends Controller
         if ($denied = RbacService::assertBrandAccess($scope, $batchBrand)) {
             return $denied;
         }
+        $brandActive = DB::table('brands')->whereRaw('LOWER(name) = LOWER(?)', [$batchBrand])->exists();
+        if (!$brandActive) {
+            return response()->json(['error' => "Brand \"{$batchBrand}\" sudah dihapus atau berada di Tempat Sampah."], 422);
+        }
 
         $rawQty = (int) ($b['qty'] ?? 0);
         if ($rawQty < 1 || $rawQty > 25000) {

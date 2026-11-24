@@ -26,19 +26,31 @@ class DashboardController extends Controller
             }
         }
 
-        $allProducts = DB::table('products')->select(['id', 'brandId', 'brandName'])->get();
-        $scopedProductsCount = 0;
-        foreach ($allProducts as $p) {
-            if ($isGlobal || RbacService::canScopeAccessBrand($scope, $p->brandName ?? null, $p->brandId ?? null)) {
-                $scopedProductsCount++;
+        $allBrands = DB::table('brands')->select(['id', 'name', 'status'])->get();
+        $activeBrandIdSet = [];
+        $activeBrandNameSet = [];
+        $scopedBrands = [];
+        foreach ($allBrands as $br) {
+            $activeBrandIdSet[(string) $br->id] = true;
+            $lowerName = strtolower(trim((string) $br->name));
+            if ($lowerName !== '') {
+                $activeBrandNameSet[$lowerName] = true;
+            }
+            if ($isGlobal || RbacService::canScopeAccessBrand($scope, $br->name ?? null, $br->id ?? null)) {
+                $scopedBrands[] = (array) $br;
             }
         }
 
-        $allBrands = DB::table('brands')->select(['id', 'name', 'status'])->get();
-        $scopedBrands = [];
-        foreach ($allBrands as $br) {
-            if ($isGlobal || RbacService::canScopeAccessBrand($scope, $br->name ?? null, $br->id ?? null)) {
-                $scopedBrands[] = (array) $br;
+        $allProducts = DB::table('products')->select(['id', 'brandId', 'brandName'])->get();
+        $scopedProductsCount = 0;
+        foreach ($allProducts as $p) {
+            $pBrandId = (string) ($p->brandId ?? '');
+            $pBrandName = strtolower(trim((string) ($p->brandName ?? '')));
+            if (!isset($activeBrandIdSet[$pBrandId]) && !isset($activeBrandNameSet[$pBrandName])) {
+                continue;
+            }
+            if ($isGlobal || RbacService::canScopeAccessBrand($scope, $p->brandName ?? null, $p->brandId ?? null)) {
+                $scopedProductsCount++;
             }
         }
 

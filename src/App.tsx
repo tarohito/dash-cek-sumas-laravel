@@ -1979,6 +1979,33 @@ export default function App() {
     () => new Set(managedBrands.map((b) => b.id).filter(Boolean)),
     [managedBrands]
   );
+  const activeBrandIdSet = React.useMemo(
+    () => new Set(brands.map((b) => b.id).filter(Boolean)),
+    [brands]
+  );
+  const activeBrandNameSet = React.useMemo(
+    () => new Set(brands.map((b) => (b.name || '').trim().toLowerCase()).filter(Boolean)),
+    [brands]
+  );
+  const isProductBrandAvailable = (p: { id?: string; brandId?: string; brandName?: string }) => {
+    const lowerBrand = (p.brandName || '').trim().toLowerCase();
+    if (trashCache?.items?.length) {
+      const inTrash = trashCache.items.some(
+        (t) =>
+          (t.entityType === 'product' && t.entityId === p.id) ||
+          (t.entityType === 'brand' &&
+            ((p.brandId && t.entityId === p.brandId) ||
+              (lowerBrand !== '' && (t.brandName || t.title || '').trim().toLowerCase() === lowerBrand)))
+      );
+      if (inTrash) return false;
+    }
+    if (brands.length > 0 || dbStatus === 'connected') {
+      const matchId = Boolean(p.brandId && activeBrandIdSet.has(p.brandId));
+      const matchName = lowerBrand !== '' && activeBrandNameSet.has(lowerBrand);
+      return matchId || matchName;
+    }
+    return true;
+  };
   const activeBrandName = managedBrand?.name || '';
   const managedBrandScopeLabel =
     managedBrands.length === 0
@@ -3000,14 +3027,22 @@ export default function App() {
     if (!brandToDelete) return;
     const brandId = brandToDelete.id;
     const brandName = brandToDelete.name;
+    const lowerBrandName = brandName.trim().toLowerCase();
     setBrands(prev => prev.filter(b => b.id !== brandId));
+    setProducts(prev => prev.filter(p => p.brandId !== brandId && (p.brandName || '').trim().toLowerCase() !== lowerBrandName));
     setIsDeleteBrandModalOpen(false);
     setBrandToDelete(null);
 
     try {
       await api.deleteBrand(brandId);
-      const freshBrands = await api.getBrands();
+      const [freshBrands, freshProducts, freshStats] = await Promise.all([
+        api.getBrands().catch(() => null),
+        api.getProducts().catch(() => null),
+        api.getDashboardStats().catch(() => null),
+      ]);
       if (Array.isArray(freshBrands)) setBrands(freshBrands);
+      if (Array.isArray(freshProducts)) setProducts(freshProducts);
+      if (freshStats) setDashboardStats(freshStats);
       refreshTrashCount();
       triggerAlert(
         'Dipindahkan ke Tempat Sampah',
@@ -5202,6 +5237,8 @@ export default function App() {
   const filteredProducts = React.useMemo(() => {
     const q = skuSearch.toLowerCase().trim();
     const matched = products.filter(p => {
+      if (!isProductBrandAvailable(p)) return false;
+
       // PEMILIK BRAND HANYA BISA MELIHAT DATA PRODUK DARI BRAND YANG DIKELOLA
       if (!isSuperAdmin) {
         const matchId = p.brandId && managedBrandIdSet.has(p.brandId);
@@ -5248,7 +5285,7 @@ export default function App() {
       }
       return 0;
     });
-  }, [products, skuSearch, skuFilterBrand, skuSortBy, isSuperAdmin, managedBrandIdSet, managedBrandNameSet]);
+  }, [products, skuSearch, skuFilterBrand, skuSortBy, isSuperAdmin, managedBrandIdSet, managedBrandNameSet, activeBrandIdSet, activeBrandNameSet, trashCache, dbStatus]);
 
   const totalSkuPages = Math.ceil(filteredProducts.length / skuPerPage) || 1;
   const currentProducts = React.useMemo(() => {
@@ -8121,7 +8158,15 @@ export default function App() {
             onCountChanged={(cnt) => setTrashCount(cnt)}
             onRestored={(types: TrashEntityType[]) => {
               if (types.includes('brand')) {
-                api.getBrands().then((res) => { if (Array.isArray(res)) setBrands(res); }).catch(() => {});
+                Promise.all([
+                  api.getBrands().catch(() => null),
+                  api.getProducts().catch(() => null),
+                  api.getDashboardStats().catch(() => null),
+                ]).then(([b, p, s]) => {
+                  if (Array.isArray(b)) setBrands(b);
+                  if (Array.isArray(p)) setProducts(p);
+                  if (s) setDashboardStats(s);
+                });
               }
               if (types.includes('product')) {
                 api.getProducts().then((res) => { if (Array.isArray(res)) setProducts(res); }).catch(() => {});
@@ -8270,7 +8315,10 @@ export default function App() {
                   onChange={setSelectedSku}
                   placeholder="-- Pilih Produk --"
                   options={products
-                    .filter((p) => canViewAllBrands || managedBrandNameSet.has((p.brandName || '').trim().toLowerCase()))
+                    .filter((p) => {
+                      if (!isProductBrandAvailable(p)) return false;
+                      return canViewAllBrands || managedBrandNameSet.has((p.brandName || '').trim().toLowerCase());
+                    })
                     .map(p => ({
                       value: p.id,
                       label: `${p.sku} (${p.brandName})`

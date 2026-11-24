@@ -18,11 +18,27 @@ class ProductController extends Controller
         }
 
         $scope = $this->brandScope($request);
+        $brandRows = DB::table('brands')->select(['id', 'name'])->get();
+        $activeBrandIdSet = [];
+        $activeBrandNameSet = [];
+        foreach ($brandRows as $br) {
+            $activeBrandIdSet[(string) $br->id] = true;
+            $lowerName = strtolower(trim((string) $br->name));
+            if ($lowerName !== '') {
+                $activeBrandNameSet[$lowerName] = true;
+            }
+        }
+
         $rows = DB::table('products')->orderBy('brandName')->orderBy('sku')->get();
 
         $result = [];
         foreach ($rows as $rowObj) {
             $p = (array) $rowObj;
+            $pBrandId = (string) ($p['brandId'] ?? '');
+            $pBrandName = strtolower(trim((string) ($p['brandName'] ?? '')));
+            if (!isset($activeBrandIdSet[$pBrandId]) && !isset($activeBrandNameSet[$pBrandName])) {
+                continue;
+            }
             if (empty($scope['isGlobal']) && !RbacService::canScopeAccessBrand($scope, $p['brandName'] ?? null, $p['brandId'] ?? null)) {
                 continue;
             }
