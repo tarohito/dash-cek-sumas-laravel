@@ -84,6 +84,7 @@ class BatchController extends Controller
         }
 
         $pinLength = min(12, max(4, (int) ($b['pinLength'] ?? 8) ?: 8));
+        $pinFormat = ($b['pinFormat'] ?? 'alphanumeric') === 'numeric' ? 'numeric' : 'alphanumeric';
         $isB2B = !empty($b['isB2B']) ? 1 : 0;
 
         $urlCheck = SecurityHardeningService::validateHttpUrl($b['redirectUrl'] ?? '', true, 'https://cek.sumas.id/');
@@ -100,23 +101,155 @@ class BatchController extends Controller
         $safeSpecs = SecurityHardeningService::sanitizeStringInput($b['specs'] ?? '', 500) ?: '-';
         $safeProject = !empty($b['project']) ? SecurityHardeningService::sanitizeStringInput($b['project'], 200) : null;
 
-        $chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-        $charsLen = strlen($chars);
-        $tagsToInsert = [];
+        // 32-char unambiguous uppercase alphanumeric alphabet (excludes 0, O, 1, I)
+        $pinAlphabet = $pinFormat === 'numeric'
+            ? '0123456789'
+            : 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+        $pinAlphabetLen = strlen($pinAlphabet);
+        $tagChars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        $tagCharsLen = strlen($tagChars);
+
+        $isWeakPin = static function (string $candidate, string $format): bool {
+            if (preg_match('/^(.)\1+$/', $candidate)) {
+                return true;
+            }
+            if ($format === 'alphanumeric' && (!preg_match('/[A-Z]/', $candidate) || !preg_match('/[0-9]/', $candidate))) {
+                return true;
+            }
+            // Reject monotonic ascending or descending runs across the entire PIN
+            $len = strlen($candidate);
+            if ($len >= 4) {
+                $asc = true;
+                $desc = true;
+                for ($p = 1; $p < $len; $p++) {
+                    $diff = ord($candidate[$p]) - ord($candidate[$p - 1]);
+                    if ($diff !== 1) {
+                        $asc = false;
+                    }
+                    if ($diff !== -1) {
+                        $desc = false;
+                    }
+                }
+                if ($asc || $desc) {
+                    return true;
+                }
+            }
+            return false;
+        };
+
+        $generateRandomString = static function (string $alphabet, int $alphabetLen, int $length): string {
+            $out = '';
+            for ($idx = 0; $idx < $length; $idx++) {
+                $out .= $alphabet[random_int(0, $alphabetLen - 1)];
+            }
+            return $out;
+        };
+
+        $pinKeyspace = pow($pinAlphabetLen, $pinLength);
+        $enforceUniquePin = $pinKeyspace > ($rawQty * 1.25);
+
+        $usedPins = [];
+        $usedTagNumbers = [];
+        $candidatePins = [];
+        $candidateTagNumbers = [];
+
         for ($i = 0; $i < $rawQty; $i++) {
             $pin = '';
-            for ($j = 0; $j < $pinLength; $j++) {
-                $pin .= (string) random_int(0, 9);
+            for ($attempt = 0; $attempt < 64; $attempt++) {
+                $tryPin = $generateRandomString($pinAlphabet, $pinAlphabetLen, $pinLength);
+                if ($isWeakPin($tryPin, $pinFormat)) {
+                    continue;
+                }
+                if ($enforceUniquePin && isset($usedPins[$tryPin])) {
+                    continue;
+                }
+                $pin = $tryPin;
+                break;
             }
+            if ($pin === '') {
+                $pin = $generateRandomString($pinAlphabet, $pinAlphabetLen, $pinLength);
+            }
+            $usedPins[$pin] = true;
+            $candidatePins[$i] = $pin;
+
             $tagNumber = '';
-            for ($k = 0; $k < 8; $k++) {
-                $tagNumber .= $chars[random_int(0, $charsLen - 1)];
+            for ($attempt = 0; $attempt < 64; $attempt++) {
+                $tryTag = $generateRandomString($tagChars, $tagCharsLen, 8);
+                if (!isset($usedTagNumbers[$tryTag])) {
+                    $tagNumber = $tryTag;
+                    break;
+                }
             }
+            if ($tagNumber === '') {
+                $tagNumber = $generateRandomString($tagChars, $tagCharsLen, 8);
+            }
+            $usedTagNumbers[$tagNumber] = true;
+            $candidateTagNumbers[$i] = $tagNumber;
+        }
+
+        // Cross-batch DB collision check (prevents duplicate PINs & Tag IDs globally)
+        if ($pinKeyspace > ($rawQty * 4)) {
+            $existingPinSet = [];
+            foreach (array_chunk(array_values($candidatePins), 500) as $chunk) {
+                $found = DB::table('tags')->whereIn('pin', $chunk)->pluck('pin')->all();
+                foreach ($found as $fp) {
+                    $existingPinSet[(string) $fp] = true;
+                }
+            }
+            if (count($existingPinSet) > 0) {
+                for ($i = 0; $i < $rawQty; $i++) {
+                    if (!isset($existingPinSet[$candidatePins[$i]])) {
+                        continue;
+                    }
+                    for ($attempt = 0; $attempt < 64; $attempt++) {
+                        $tryPin = $generateRandomString($pinAlphabet, $pinAlphabetLen, $pinLength);
+                        if ($isWeakPin($tryPin, $pinFormat) || isset($usedPins[$tryPin]) || isset($existingPinSet[$tryPin])) {
+                            continue;
+                        }
+                        if (!DB::table('tags')->where('pin', $tryPin)->exists()) {
+                            $usedPins[$tryPin] = true;
+                            $candidatePins[$i] = $tryPin;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
+        $existingTagSet = [];
+        foreach (array_chunk(array_values($candidateTagNumbers), 500) as $chunk) {
+            $found = DB::table('tags')->whereIn('tagNumber', $chunk)->pluck('tagNumber')->all();
+            foreach ($found as $ft) {
+                $existingTagSet[(string) $ft] = true;
+            }
+        }
+        if (count($existingTagSet) > 0) {
+            for ($i = 0; $i < $rawQty; $i++) {
+                if (!isset($existingTagSet[$candidateTagNumbers[$i]])) {
+                    continue;
+                }
+                for ($attempt = 0; $attempt < 64; $attempt++) {
+                    $tryTag = $generateRandomString($tagChars, $tagCharsLen, 8);
+                    if (isset($usedTagNumbers[$tryTag]) || isset($existingTagSet[$tryTag])) {
+                        continue;
+                    }
+                    if (!DB::table('tags')->where('tagNumber', $tryTag)->exists()) {
+                        $usedTagNumbers[$tryTag] = true;
+                        $candidateTagNumbers[$i] = $tryTag;
+                        break;
+                    }
+                }
+            }
+        }
+
+        $tagsToInsert = [];
+        for ($i = 0; $i < $rawQty; $i++) {
+            $tagNumber = $candidateTagNumbers[$i];
             $tagsToInsert[] = [
                 'id' => "tag-{$batchPk}-{$tagNumber}-{$i}",
                 'batchId' => $batchPk,
                 'tagNumber' => $tagNumber,
-                'pin' => $pin,
+                'pin' => $candidatePins[$i],
                 'status' => 'Tersedia',
                 'project' => null,
                 'specs' => '-',
@@ -685,6 +818,7 @@ class BatchController extends Controller
         }
 
         $authUser = $this->authUser($request);
+        TrashService::ensureTableExists();
         $trashId = null;
         DB::transaction(function () use ($decodedId, $existing, $authUser, $request, &$trashId) {
             $tags = DB::table('tags')->where('batchId', $decodedId)->get()->map(fn ($r) => (array) $r)->all();

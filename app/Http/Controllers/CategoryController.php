@@ -178,6 +178,7 @@ class CategoryController extends Controller
 
         $deletedIds = [$decodedId];
         $authUser = $this->authUser($request);
+        TrashService::ensureTableExists();
         $trashId = null;
         DB::transaction(function () use ($decodedId, $existing, $authUser, $request, &$deletedIds, &$trashId) {
             $items = [(array) $existing];

@@ -676,6 +676,7 @@ export default function App() {
 
   const [selectedSku, setSelectedSku] = useState('');
   const [selectedPinLength, setSelectedPinLength] = useState('8');
+  const [selectedPinFormat, setSelectedPinFormat] = useState<'alphanumeric' | 'numeric'>('alphanumeric');
   
   // TEMA & ANIMASI
   const [isDarkMode, setIsDarkMode] = useState(() => {
@@ -827,7 +828,11 @@ export default function App() {
   const parseApiResponse = async (res: Response, fallbackError: string) => {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      throw new Error((data && typeof data.error === 'string' && data.error) || fallbackError);
+      const serverMsg =
+        (data && typeof data.error === 'string' && data.error) ||
+        (data && typeof data.message === 'string' && data.message) ||
+        fallbackError;
+      throw new Error(serverMsg);
     }
     return data;
   };
@@ -1022,7 +1027,7 @@ export default function App() {
       return parseApiResponse(res, 'Gagal membuat product');
     },
     async updateProduct(id: string, product: any) {
-      const res = await apiFetch(`/api/products/${id}`, {
+      const res = await apiFetch(`/api/products/${encodeURIComponent(id)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(product),
@@ -1030,7 +1035,7 @@ export default function App() {
       return parseApiResponse(res, 'Gagal memperbarui product');
     },
     async deleteProduct(id: string) {
-      const res = await apiFetch(`/api/products/${id}`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/products/${encodeURIComponent(id)}`, { method: 'DELETE' });
       return parseApiResponse(res, 'Gagal menghapus product');
     },
     async getNotifications(
@@ -3028,6 +3033,8 @@ export default function App() {
     const brandId = brandToDelete.id;
     const brandName = brandToDelete.name;
     const lowerBrandName = brandName.trim().toLowerCase();
+    const prevBrands = brands;
+    const prevProducts = products;
     setBrands(prev => prev.filter(b => b.id !== brandId));
     setProducts(prev => prev.filter(p => p.brandId !== brandId && (p.brandName || '').trim().toLowerCase() !== lowerBrandName));
     setIsDeleteBrandModalOpen(false);
@@ -3049,11 +3056,13 @@ export default function App() {
         `Brand "${brandName}" dipindahkan ke Tempat Sampah (tersimpan 30 hari).`,
         'success'
       );
-    } catch (err) {
+    } catch (err: any) {
+      setBrands(prevBrands);
+      setProducts(prevProducts);
       console.error('Gagal hapus brand di SQLite:', err);
       triggerAlert(
         'Gagal Menghapus Brand',
-        'Terjadi kesalahan saat menghapus brand.',
+        err?.message || 'Terjadi kesalahan saat menghapus brand.',
         'error'
       );
     }
@@ -3919,6 +3928,7 @@ export default function App() {
     if (!skuToDelete) return;
     const skuId = skuToDelete.id;
     const skuName = skuToDelete.sku;
+    const prevProducts = products;
 
     setProducts(prev => prev.filter(p => p.id !== skuId));
     setIsDeleteSkuModalOpen(false);
@@ -3926,19 +3936,24 @@ export default function App() {
 
     try {
       await api.deleteProduct(skuId);
-      const freshProducts = await api.getProducts();
+      const [freshProducts, freshStats] = await Promise.all([
+        api.getProducts().catch(() => null),
+        api.getDashboardStats().catch(() => null),
+      ]);
       if (Array.isArray(freshProducts)) setProducts(freshProducts);
+      if (freshStats) setDashboardStats(freshStats);
       refreshTrashCount();
       triggerAlert(
         'Dipindahkan ke Tempat Sampah',
         `Produk "${skuName}" dipindahkan ke Tempat Sampah (tersimpan 30 hari).`,
         'success'
       );
-    } catch (err) {
+    } catch (err: any) {
+      setProducts(prevProducts);
       console.error('Gagal menghapus SKU di SQLite:', err);
       triggerAlert(
         'Gagal Menghapus SKU',
-        'Terjadi kesalahan saat menghapus data SKU.',
+        err?.message || 'Terjadi kesalahan saat menghapus data SKU.',
         'error'
       );
     }
@@ -4138,6 +4153,14 @@ export default function App() {
   const generateAlphanumericPIN = (length: number) => {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Menghilangkan O, 0, I, 1 agar tidak membingungkan
     let pin = '';
+    if (typeof window !== 'undefined' && window.crypto?.getRandomValues) {
+      const bytes = new Uint8Array(length);
+      window.crypto.getRandomValues(bytes);
+      for (let i = 0; i < length; i++) {
+        pin += chars.charAt(bytes[i] & 31);
+      }
+      return pin;
+    }
     for (let i = 0; i < length; i++) {
       pin += chars.charAt(Math.floor(Math.random() * chars.length));
     }
@@ -4231,6 +4254,7 @@ export default function App() {
       qty: Number(formQty),
       specs: '-', 
       pinLength: Number(selectedPinLength),
+      pinFormat: selectedPinFormat,
       status: 'Aktif', // Status batch aktif normal
       isB2B: isBrandB2B ? 1 : 0,
       redirectUrl: (formRedirectUrl && formRedirectUrl.trim()) || 'https://cek.sumas.id/',
@@ -4252,7 +4276,7 @@ export default function App() {
         if (Array.isArray(freshBatches)) setBatches(freshBatches);
         triggerAlert(
           'Batch Berhasil Dibuat',
-          `Batch "${newBatch.batchId}" (${newBatch.qty} tag) berhasil di-generate dengan QR Code Dinamis dan format ID 8 digit acak.`,
+          `Batch "${newBatch.batchId}" (${newBatch.qty} tag) berhasil di-generate dengan PIN ${newBatch.pinLength} digit ${selectedPinFormat === 'alphanumeric' ? 'Huruf & Angka' : 'Angka'}.`,
           'success'
         );
       })
@@ -4260,7 +4284,7 @@ export default function App() {
         console.error('Gagal simpan batch ke SQLite:', err);
         triggerAlert(
           'Gagal Membuat Batch',
-          'Terjadi kesalahan saat menyimpan batch tag ke database.',
+          err?.message || 'Terjadi kesalahan saat menyimpan batch tag ke database.',
           'error'
         );
       });
@@ -8419,6 +8443,40 @@ export default function App() {
                 </div>
               </div>
 
+              {/* FORMAT KARAKTER PIN */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1.5 flex items-center justify-between">
+                  <span>Format Karakter PIN</span>
+                  <span className="text-[10px] text-slate-400 dark:text-zinc-500 font-medium">
+                    {selectedPinFormat === 'alphanumeric' ? 'Anti-ambigu (tanpa O/0/I/1)' : 'Numerik standar'}
+                  </span>
+                </label>
+                <div className="grid grid-cols-2 gap-2 h-[42px] p-1 bg-slate-100 dark:bg-zinc-800 rounded-full">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPinFormat('alphanumeric')}
+                    className={`text-xs font-semibold rounded-full transition-colors cursor-pointer ${
+                      selectedPinFormat === 'alphanumeric'
+                        ? 'bg-white dark:bg-zinc-900 text-[#c28e62]'
+                        : 'text-slate-500 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-zinc-200'
+                    }`}
+                  >
+                    Huruf &amp; Angka (Default)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPinFormat('numeric')}
+                    className={`text-xs font-semibold rounded-full transition-colors cursor-pointer ${
+                      selectedPinFormat === 'numeric'
+                        ? 'bg-white dark:bg-zinc-900 text-[#c28e62]'
+                        : 'text-slate-500 dark:text-zinc-400 hover:text-slate-800 dark:hover:text-zinc-200'
+                    }`}
+                  >
+                    Angka Saja (0–9)
+                  </button>
+                </div>
+              </div>
+
               {/* BARIS 3: TIPE QR CODE - 1 KOLOM UTUH */}
               <div>
                 <label className="block text-xs font-semibold text-slate-700 dark:text-zinc-300 mb-1.5">
@@ -8471,7 +8529,7 @@ export default function App() {
                   <span>Format ID & PIN:</span>
                 </span>
                 <span className="font-mono text-[11px] font-bold text-slate-800 dark:text-zinc-200 bg-white dark:bg-zinc-900 px-3 py-1 rounded-full border border-slate-200 dark:border-zinc-700">
-                  ID: 8 Karakter Alfanumerik • PIN: {selectedPinLength} Digit Angka
+                  ID: 8 Karakter Alfanumerik • PIN: {selectedPinLength} Digit {selectedPinFormat === 'alphanumeric' ? 'Huruf & Angka' : 'Angka'}
                 </span>
               </div>
             </div>

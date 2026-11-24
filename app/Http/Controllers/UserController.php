@@ -299,6 +299,7 @@ class UserController extends Controller
 
         SessionAuthService::revokeAllUserSessions($decodedId);
 
+        TrashService::ensureTableExists();
         $trashId = null;
         DB::transaction(function () use ($decodedId, $existing, $authUser, $request, &$trashId) {
             $linkedBrandIds = DB::table('brands')->where('ownerId', $decodedId)->pluck('id')->all();

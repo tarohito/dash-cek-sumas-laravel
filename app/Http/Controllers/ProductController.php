@@ -375,6 +375,7 @@ class ProductController extends Controller
         }
 
         $authUser = $this->authUser($request);
+        TrashService::ensureTableExists();
         $trashId = null;
         DB::transaction(function () use ($decodedId, $existing, $authUser, $request, &$trashId) {
             $trashId = TrashService::moveToTrash([
