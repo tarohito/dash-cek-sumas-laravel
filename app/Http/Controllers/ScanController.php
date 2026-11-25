@@ -289,6 +289,8 @@ class ScanController extends Controller
             ]);
         }
 
+        SecurityPolicyService::syncScanActivitiesTable();
+
         $isAnomalyScan = $finalStatus === 'suspicious' || !empty($evaluation['impossibleTravelDetected']);
         NotificationService::createNotification([
             'type' => 'scan',

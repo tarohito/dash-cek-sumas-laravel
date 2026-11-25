@@ -1092,4 +1092,74 @@ HTML;
 
         return $buckets;
     }
+
+    /**
+     * Recompute and persist real dynamic rows into the `scan_activities` table
+     * directly from active `scan_points` (linked to active brands/batches).
+     */
+    public static function syncScanActivitiesTable(): void
+    {
+        try {
+            $activeBrandNames = [];
+            foreach (DB::table('brands')->pluck('name') as $name) {
+                $norm = strtolower(trim((string) $name));
+                if ($norm !== '') {
+                    $activeBrandNames[$norm] = true;
+                }
+            }
+
+            $activeBatchKeys = [];
+            foreach (DB::table('batches')->select(['id', 'batchId'])->get() as $b) {
+                $idKey = strtolower(trim((string) ($b->id ?? '')));
+                $codeKey = strtolower(trim((string) ($b->batchId ?? '')));
+                if ($idKey !== '') {
+                    $activeBatchKeys[$idKey] = true;
+                }
+                if ($codeKey !== '') {
+                    $activeBatchKeys[$codeKey] = true;
+                }
+            }
+
+            $allPoints = DB::table('scan_points')
+                ->select(['id', 'brand', 'batchId', 'totalScans', 'todayScans', 'status', 'latestTime', 'createdAt', 'scanHistory'])
+                ->get();
+
+            $activePoints = [];
+            foreach ($allPoints as $pt) {
+                $brandKey = strtolower(trim((string) ($pt->brand ?? '')));
+                if ($brandKey !== '' && !isset($activeBrandNames[$brandKey])) {
+                    continue;
+                }
+                $batchKey = strtolower(trim((string) ($pt->batchId ?? '')));
+                if ($batchKey !== '' && !isset($activeBatchKeys[$batchKey])) {
+                    continue;
+                }
+                $activePoints[] = $pt;
+            }
+
+            $rowsToInsert = [];
+            foreach (['7d', '30d', '12m'] as $range) {
+                $buckets = self::aggregateScanActivityFromPoints($activePoints, $range);
+                foreach ($buckets as $b) {
+                    $rowsToInsert[] = [
+                        'rangeType' => (string) $b['rangeType'],
+                        'label' => (string) $b['label'],
+                        'fullDate' => (string) $b['fullDate'],
+                        'scans' => (int) $b['scans'],
+                        'valid' => (int) $b['valid'],
+                        'topBrand' => (string) $b['topBrand'],
+                        'sortOrder' => (int) $b['sortOrder'],
+                    ];
+                }
+            }
+
+            DB::transaction(function () use ($rowsToInsert) {
+                DB::table('scan_activities')->delete();
+                if (count($rowsToInsert) > 0) {
+                    DB::table('scan_activities')->insert($rowsToInsert);
+                }
+            });
+        } catch (\Throwable) {
+        }
+    }
 }

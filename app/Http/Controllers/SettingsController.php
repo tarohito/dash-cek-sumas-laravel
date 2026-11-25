@@ -147,6 +147,7 @@ class SettingsController extends Controller
         $batches = DB::table('batches')->get()->map(fn ($r) => (array) $r)->all();
         $tags = DB::table('tags')->get()->map(fn ($r) => (array) $r)->all();
         $scanPoints = DB::table('scan_points')->get()->map(fn ($r) => (array) $r)->all();
+        SecurityPolicyService::syncScanActivitiesTable();
         $scanActivities = DB::table('scan_activities')->get()->map(fn ($r) => (array) $r)->all();
         $categories = DB::table('categories')->get()->map(fn ($r) => (array) $r)->all();
         $brands = DB::table('brands')->get()->map(fn ($r) => (array) $r)->all();

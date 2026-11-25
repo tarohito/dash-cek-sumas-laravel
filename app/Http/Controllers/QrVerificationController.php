@@ -136,6 +136,7 @@ HTML;
                     'createdAt' => gmdate('Y-m-d'),
                 ]);
             }
+            SecurityPolicyService::syncScanActivitiesTable();
         } catch (\Throwable) {
         }
 

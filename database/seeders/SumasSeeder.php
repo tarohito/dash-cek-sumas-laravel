@@ -35,7 +35,6 @@ class SumasSeeder extends Seeder
             $simpleTables = [
                 'batches' => 'id',
                 'scan_points' => 'id',
-                'scan_activities' => 'id',
                 'audit_logs' => 'id',
                 'brands' => 'id',
                 'products' => 'id',
@@ -60,5 +59,7 @@ class SumasSeeder extends Seeder
                 }
             }
         });
+
+        \App\Services\SecurityPolicyService::syncScanActivitiesTable();
     }
 }

@@ -475,4 +475,23 @@ class SumasFullEndpointTest extends TestCase
         $this->assertSame('Android Mobile', $parsed['device']);
         $this->assertSame('Google Chrome', $parsed['browser']);
     }
+
+    public function test_scan_activities_table_updates_dynamically_on_new_scan(): void
+    {
+        $beforeSum = (int) DB::table('scan_activities')->where('rangeType', '12m')->sum('scans');
+        $this->assertGreaterThan(0, DB::table('scan_activities')->count());
+
+        $sampleTag = DB::table('tags')->first();
+        $this->assertNotNull($sampleTag);
+
+        $this->postJson('/api/q/' . rawurlencode($sampleTag->tagNumber) . '/verify', [
+            'gpsGranted' => true,
+            'lat' => -7.2575,
+            'lng' => 112.7521,
+            'accuracyMeters' => 15,
+        ])->assertSuccessful();
+
+        $afterSum = (int) DB::table('scan_activities')->where('rangeType', '12m')->sum('scans');
+        $this->assertGreaterThan($beforeSum, $afterSum, 'scan_activities table must reflect newly recorded scan dynamically');
+    }
 }
