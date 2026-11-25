@@ -9582,78 +9582,89 @@ export default function App() {
 
               {/* TAB 2: RINGKASAN PROYEK */}
               {activeTab === 'projects' && (
-                <div className="flex-1 overflow-y-auto space-y-4">
+                <div className="flex-1 overflow-y-auto pr-1.5 space-y-2.5">
                   {activeBatchProjects.length > 0 ? (
                     activeBatchProjects.map((proj: any, idx: number) => (
-                      <div key={idx} className="group/proj bg-white dark:bg-zinc-800 border border-slate-200 dark:border-zinc-700 hover:border-[#c28e62]/40 rounded-2xl p-4 sm:p-5 transition-all">
-                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100 dark:border-zinc-700">
-                          <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-full bg-[#c28e62]/10 dark:bg-zinc-700 flex items-center justify-center text-[#c28e62]">
-                              <Building2 size={16} />
+                      <div
+                        key={proj.name || idx}
+                        className="bg-white dark:bg-zinc-900 border border-slate-200/80 dark:border-zinc-800 hover:border-[#c28e62]/40 rounded-xl px-4 py-3.5 transition-colors"
+                      >
+                        {/* Baris 1: Nama Proyek, Tanggal & Jumlah Tag */}
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <h4 className="text-sm font-bold text-slate-800 dark:text-zinc-100 truncate">
+                                {proj.name}
+                              </h4>
+                              <NewBadge date={proj.date} size="xs" />
                             </div>
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <h4 className="font-bold text-slate-800 dark:text-zinc-100 text-sm sm:text-base">{proj.name}</h4>
-                                <NewBadge date={proj.date} />
-                              </div>
-                              <p className="text-[11px] text-slate-400 dark:text-zinc-500">Dialokasikan pada: {proj.date}</p>
-                            </div>
+                            <p className="text-[11px] text-slate-400 dark:text-zinc-500 tabular-nums mt-0.5">
+                              {proj.date}
+                            </p>
                           </div>
-                          <span className="px-3 py-1 bg-[#c28e62]/10 text-[#c28e62] font-bold rounded-full text-xs self-start sm:self-auto border border-[#c28e62]/30">
-                            {proj.count} Tag Dialokasikan
+                          <span className="px-2.5 py-1 rounded-full bg-[#c28e62]/10 text-[#c28e62] text-xs font-bold tabular-nums shrink-0">
+                            {proj.count} Tag
                           </span>
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 my-3 text-xs">
-                          <div className="bg-slate-50 dark:bg-zinc-900 p-2.5 rounded-xl border border-slate-100 dark:border-zinc-700/50">
-                            <span className="text-slate-400 block text-[10px]">Spesifikasi Material:</span>
-                            <span className="font-semibold text-slate-700 dark:text-zinc-200">{proj.specs}</span>
+                        {/* Baris 2: Spesifikasi Ringkas */}
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-2 mt-3 pt-2.5 border-t border-slate-100 dark:border-zinc-800/80 text-xs">
+                          <div className="min-w-0">
+                            <span className="block text-[10px] font-medium uppercase tracking-wide text-slate-400 dark:text-zinc-500">
+                              Material
+                            </span>
+                            <span className="font-semibold text-slate-700 dark:text-zinc-200 break-words">
+                              {proj.specs || '-'}
+                            </span>
                           </div>
-                          <div className="bg-slate-50 dark:bg-zinc-900 p-2.5 rounded-xl border border-slate-100 dark:border-zinc-700/50">
-                            <span className="text-slate-400 block text-[10px]">Kode + Type:</span>
-                            <span className="font-semibold text-slate-700 dark:text-zinc-200">{proj.codeType}</span>
+                          <div className="min-w-0">
+                            <span className="block text-[10px] font-medium uppercase tracking-wide text-slate-400 dark:text-zinc-500">
+                              Kode / Type
+                            </span>
+                            <span className="font-semibold text-slate-700 dark:text-zinc-200 break-words">
+                              {proj.codeType || '-'}
+                            </span>
                           </div>
-                          <div className="bg-slate-50 dark:bg-zinc-900 p-2.5 rounded-xl border border-slate-100 dark:border-zinc-700/50">
-                            <span className="text-slate-400 block text-[10px]">Garansi Pemasangan:</span>
-                            <span className="font-semibold text-slate-700 dark:text-zinc-200">{proj.warranty}</span>
+                          <div className="min-w-0">
+                            <span className="block text-[10px] font-medium uppercase tracking-wide text-slate-400 dark:text-zinc-500">
+                              Garansi
+                            </span>
+                            <span className="font-semibold text-slate-700 dark:text-zinc-200 break-words">
+                              {proj.warranty || '-'}
+                            </span>
                           </div>
                         </div>
 
-                        <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100 dark:border-zinc-700/60 mt-2 flex-wrap transition-opacity duration-150 opacity-90 group-hover/proj:opacity-100">
+                        {/* Baris 3: Aksi Fungsional Jelas */}
+                        <div className="flex flex-wrap items-center justify-between gap-2 mt-3 pt-2.5 border-t border-slate-100 dark:border-zinc-800/80">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleTagFilterChange(proj.name);
+                              setActiveTab('tags');
+                            }}
+                            className="h-8 px-3 rounded-lg bg-[#c28e62]/10 hover:bg-[#c28e62]/20 text-[#c28e62] text-xs font-semibold inline-flex items-center transition-colors cursor-pointer"
+                          >
+                            Lihat Tag →
+                          </button>
+
                           {canAllocateBatch && (
-                            <>
+                            <div className="flex items-center gap-2">
                               <button
                                 type="button"
                                 onClick={() => openEditProjectModal(proj)}
-                                className="text-xs font-semibold text-slate-700 dark:text-zinc-200 hover:text-[#c28e62] dark:hover:text-[#c28e62] flex items-center gap-1.5 cursor-pointer transition-colors"
+                                className="h-8 px-3 rounded-lg border border-slate-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 hover:bg-slate-50 dark:hover:bg-zinc-700 text-slate-700 dark:text-zinc-200 text-xs font-semibold inline-flex items-center transition-colors cursor-pointer"
                               >
-                                <Edit3 size={13} className="text-[#c28e62]" />
-                                <span>Edit Data Proyek</span>
+                                Edit
                               </button>
-                              <span className="text-slate-300 dark:text-zinc-600">|</span>
-                            </>
-                          )}
-                          <button
-                            onClick={() => {
-                              setTagProjectFilter(proj.name);
-                              setActiveTab('tags');
-                            }}
-                            className="text-xs font-semibold text-[#c28e62] hover:underline cursor-pointer"
-                          >
-                            Lihat di Grid PIN →
-                          </button>
-                          {canAllocateBatch && (
-                            <>
-                              <span className="text-slate-300 dark:text-zinc-600">|</span>
                               <button
                                 type="button"
                                 onClick={() => setDeallocatingProject(proj)}
-                                className="text-xs font-medium text-rose-600 dark:text-rose-400 hover:underline cursor-pointer flex items-center gap-1"
+                                className="h-8 px-3 rounded-lg border border-rose-200/80 dark:border-rose-900/60 bg-rose-50/70 dark:bg-rose-950/30 hover:bg-rose-100/80 dark:hover:bg-rose-950/60 text-rose-600 dark:text-rose-400 text-xs font-semibold inline-flex items-center transition-colors cursor-pointer"
                               >
-                                <Trash2 size={13} className="text-rose-500" />
-                                <span>Lepas Alokasi (Kembalikan ke Stok)</span>
+                                Lepas Alokasi
                               </button>
-                            </>
+                            </div>
                           )}
                         </div>
                       </div>
@@ -9662,7 +9673,7 @@ export default function App() {
                     <EmptyStatePanel
                       icon={<Building2 size={22} className="stroke-[1.8]" />}
                       title="Belum Ada Proyek Teralokasi"
-                      description='Seluruh PIN pada batch ini masih tersedia sebagai stok. Buka tab "Daftar Tag", pilih PIN yang ingin digunakan, lalu alokasikan ke proyek.'
+                      description='Pilih tag di tab "Daftar Tag" untuk mengalokasikannya ke proyek.'
                     />
                   )}
                 </div>
