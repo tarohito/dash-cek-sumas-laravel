@@ -205,10 +205,65 @@ export const ScanDetailModal: React.FC<ScanDetailModalProps> = ({
     setTimeout(() => setCopiedField(null), 2000);
   };
 
-  const isGpsSource = useMemo(() => {
-    if (!activeSession) return false;
-    return Boolean(activeSession.venue && activeSession.venue !== 'Lokasi Terdaftar');
-  }, [activeSession]);
+  const isGpsEntry = (entry: any): boolean => {
+    if (!entry) return false;
+    const src = String(entry.locationSource || '').trim().toUpperCase();
+    if (src === 'GPS') return true;
+    if (src.includes('GEOIP') || src.includes('IP')) return false;
+    const venue = String(entry.venue || '').trim();
+    return venue.startsWith('GPS Presisi');
+  };
+
+  const getLocationSourceLabel = (entry: any): string => {
+    if (!entry) return 'Estimasi GeoIP';
+    if (isGpsEntry(entry)) {
+      const acc = typeof entry.accuracyMeters === 'number' && Number.isFinite(entry.accuracyMeters)
+        ? ` (±${Math.round(entry.accuracyMeters)}m)`
+        : '';
+      return `GPS Presisi${acc}`;
+    }
+    const src = String(entry.locationSource || '').trim();
+    if (src && src !== '-') return src;
+    return 'Estimasi GeoIP';
+  };
+
+  const formatScanDevice = (rawDevice?: string, rawBrowser?: string): string => {
+    const dev = String(rawDevice || '').trim();
+    const brw = String(rawBrowser || '').trim();
+    const looksLikeRawUa = /^Mozilla\/|AppleWebKit\//i.test(dev);
+
+    if (looksLikeRawUa) {
+      let device = 'Desktop Browser';
+      if (/iPhone/i.test(dev)) device = 'iPhone (iOS)';
+      else if (/iPad/i.test(dev)) device = 'iPad (iPadOS)';
+      else if (/Android/i.test(dev)) {
+        const m = dev.match(/Android\s[\d.]+;\s*([^;)]+)/i);
+        const model = m ? m[1].trim() : '';
+        device = !model || model.toUpperCase() === 'K' || model.toLowerCase() === 'wv' || model.toLowerCase() === 'mobile'
+          ? 'Android Mobile'
+          : `Android (${model.slice(0, 32)})`;
+      } else if (/Macintosh/i.test(dev)) device = 'macOS Desktop';
+      else if (/Windows/i.test(dev)) device = 'Windows Desktop';
+      else if (/Linux/i.test(dev)) device = 'Linux Desktop';
+
+      let browser = 'Web Browser';
+      if (/SamsungBrowser\//i.test(dev)) browser = 'Samsung Internet';
+      else if (/EdgA\/|EdgiOS\/|Edg\//i.test(dev)) browser = 'Microsoft Edge';
+      else if (/OPR\/|Opera|OPT\//i.test(dev)) browser = 'Opera';
+      else if (/UCBrowser\//i.test(dev)) browser = 'UC Browser';
+      else if (/Firefox\/|FxiOS\//i.test(dev)) browser = 'Mozilla Firefox';
+      else if (/CriOS\//i.test(dev) || (/Chrome\//i.test(dev) && !/Chromium/i.test(dev))) browser = 'Google Chrome';
+      else if (/Safari\//i.test(dev) && !/Chrome\/|CriOS\/|Android/i.test(dev)) browser = 'Safari';
+
+      return `${device} · ${browser}`;
+    }
+
+    const cleanDev = dev && dev !== '-' ? dev : 'Tidak tercatat';
+    const cleanBrw = brw && brw !== '-' && !cleanDev.toLowerCase().includes(brw.toLowerCase()) ? brw : '';
+    return cleanBrw ? `${cleanDev} · ${cleanBrw}` : cleanDev;
+  };
+
+  const isGpsSource = useMemo(() => isGpsEntry(activeSession), [activeSession]);
 
   // Leaflet map initialization
   useEffect(() => {
@@ -518,7 +573,7 @@ export const ScanDetailModal: React.FC<ScanDetailModalProps> = ({
 
                   <div className="flex items-center justify-between text-slate-500 dark:text-zinc-400">
                     <span>IP & Perangkat:</span>
-                    <span className="font-mono text-slate-700 dark:text-zinc-300 text-right truncate max-w-[200px]" title={activeSession.device}>
+                    <span className="font-mono text-slate-700 dark:text-zinc-300 text-right truncate max-w-[200px]" title={formatScanDevice(activeSession.device, activeSession.browser)}>
                       {activeSession.ipAddress} ({activeSession.isp})
                     </span>
                   </div>
@@ -637,14 +692,14 @@ export const ScanDetailModal: React.FC<ScanDetailModalProps> = ({
                             {item.isp}
                           </span>
                           <span className="text-slate-400 dark:text-zinc-500 text-[11px] block mt-0.5">
-                            {item.venue ? 'GPS Presisi' : 'Estimasi GeoIP'}
+                            {getLocationSourceLabel(item)}
                           </span>
                         </div>
 
                         <div>
                           <span className="text-slate-400 dark:text-zinc-500 text-[11px] block">Perangkat & Catatan</span>
-                          <span className="font-medium text-slate-800 dark:text-zinc-200 block mt-0.5 truncate" title={item.device}>
-                            {item.device}
+                          <span className="font-medium text-slate-800 dark:text-zinc-200 block mt-0.5 truncate" title={formatScanDevice(item.device, item.browser)}>
+                            {formatScanDevice(item.device, item.browser)}
                           </span>
                           <span className={`block text-[11px] mt-0.5 font-medium ${sessionMeta.text}`}>
                             {item.statusNote}

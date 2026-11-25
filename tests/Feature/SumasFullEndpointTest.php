@@ -466,4 +466,13 @@ class SumasFullEndpointTest extends TestCase
 
         $this->assertSame(['Alpha Newest', 'Middle Project', 'Zeta Oldest'], $names);
     }
+
+    public function test_android_chrome_user_agent_and_raw_device_info_parsing(): void
+    {
+        $chromeAndroidUa = 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36';
+        $parsed = \App\Services\SecurityPolicyService::parseDeviceAndBrowser($chromeAndroidUa);
+
+        $this->assertSame('Android Mobile', $parsed['device']);
+        $this->assertSame('Google Chrome', $parsed['browser']);
+    }
 }

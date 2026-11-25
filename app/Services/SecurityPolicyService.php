@@ -175,36 +175,47 @@ class SecurityPolicyService
      */
     public static function parseDeviceAndBrowser(string $userAgent): array
     {
+        $ua = trim($userAgent);
         $device = 'Desktop Browser';
-        if (preg_match('/iPhone/i', $userAgent)) {
+        if (preg_match('/iPhone/i', $ua)) {
             $device = 'iPhone (iOS)';
-        } elseif (preg_match('/iPad/i', $userAgent)) {
+        } elseif (preg_match('/iPad/i', $ua)) {
             $device = 'iPad (iPadOS)';
-        } elseif (preg_match('/Android/i', $userAgent)) {
-            if (preg_match('/Android\s[\d.]+;\s*([^;)]+)/i', $userAgent, $m)) {
-                $device = 'Android (' . mb_substr(trim($m[1]), 0, 32) . ')';
+        } elseif (preg_match('/Android/i', $ua)) {
+            if (preg_match('/Android\s[\d.]+;\s*([^;)]+)/i', $ua, $m)) {
+                $model = trim($m[1]);
+                // Chrome 110+ uses User-Agent Reduction ("Android 10; K") instead of real model
+                if ($model === '' || strtoupper($model) === 'K' || strtolower($model) === 'wv' || strtolower($model) === 'mobile') {
+                    $device = 'Android Mobile';
+                } else {
+                    $device = 'Android (' . mb_substr($model, 0, 32) . ')';
+                }
             } else {
                 $device = 'Android Mobile';
             }
-        } elseif (preg_match('/Macintosh/i', $userAgent)) {
+        } elseif (preg_match('/Macintosh/i', $ua)) {
             $device = 'macOS Desktop';
-        } elseif (preg_match('/Windows/i', $userAgent)) {
+        } elseif (preg_match('/Windows/i', $ua)) {
             $device = 'Windows Desktop';
-        } elseif (preg_match('/Linux/i', $userAgent)) {
+        } elseif (preg_match('/Linux/i', $ua)) {
             $device = 'Linux Desktop';
         }
 
         $browser = 'Web Browser';
-        if (preg_match('/Edg\//i', $userAgent)) {
+        if (preg_match('/SamsungBrowser\//i', $ua)) {
+            $browser = 'Samsung Internet';
+        } elseif (preg_match('/EdgA\/|EdgiOS\/|Edg\//i', $ua)) {
             $browser = 'Microsoft Edge';
-        } elseif (preg_match('/OPR\/|Opera/i', $userAgent)) {
+        } elseif (preg_match('/OPR\/|Opera|OPT\//i', $ua)) {
             $browser = 'Opera';
-        } elseif (preg_match('/Chrome\//i', $userAgent) && !preg_match('/Chromium/i', $userAgent)) {
-            $browser = 'Google Chrome';
-        } elseif (preg_match('/Safari\//i', $userAgent) && !preg_match('/Chrome\//i', $userAgent)) {
-            $browser = 'Safari';
-        } elseif (preg_match('/Firefox\//i', $userAgent)) {
+        } elseif (preg_match('/UCBrowser\//i', $ua)) {
+            $browser = 'UC Browser';
+        } elseif (preg_match('/Firefox\/|FxiOS\//i', $ua)) {
             $browser = 'Mozilla Firefox';
+        } elseif (preg_match('/CriOS\//i', $ua) || (preg_match('/Chrome\//i', $ua) && !preg_match('/Chromium/i', $ua))) {
+            $browser = 'Google Chrome';
+        } elseif (preg_match('/Safari\//i', $ua) && !preg_match('/Chrome\/|CriOS\/|Android/i', $ua)) {
+            $browser = 'Safari';
         }
 
         return ['device' => $device, 'browser' => $browser];
@@ -382,8 +393,14 @@ class SecurityPolicyService
             $locationSource = $effectiveMode === 'hybrid' ? 'GeoIP (Fallback)' : 'GeoIP';
         }
 
-        $parsedUa = self::parseDeviceAndBrowser((string) ($input['userAgent'] ?? ''));
-        $deviceLabel = !empty($input['deviceInfo']) ? (string) $input['deviceInfo'] : $parsedUa['device'];
+        $rawDeviceInfo = trim((string) ($input['deviceInfo'] ?? ''));
+        $rawUa = trim((string) ($input['userAgent'] ?? ''));
+        $isRawUaInDeviceInfo = $rawDeviceInfo !== '' && preg_match('/^Mozilla\/|AppleWebKit\//i', $rawDeviceInfo);
+        $effectiveUa = $isRawUaInDeviceInfo ? $rawDeviceInfo : ($rawUa !== '' ? $rawUa : $rawDeviceInfo);
+        $parsedUa = self::parseDeviceAndBrowser($effectiveUa);
+        $deviceLabel = ($rawDeviceInfo !== '' && !$isRawUaInDeviceInfo)
+            ? $rawDeviceInfo
+            : $parsedUa['device'];
         $accuracy = $input['accuracyMeters'] ?? null;
         if (!empty($input['venue'])) {
             $venue = (string) $input['venue'];
@@ -743,32 +760,74 @@ class SecurityPolicyService
           return;
         }
 
-        navigator.geolocation.getCurrentPosition(
-          function(pos) {
+        var bestPos = null;
+        var finished = false;
+        var watchId = null;
+        var fallbackTimer = null;
+
+        function finishWithPos(pos) {
+          if (finished) return;
+          finished = true;
+          if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+          if (fallbackTimer !== null) clearTimeout(fallbackTimer);
+          submitVerification({
+            gpsGranted: true,
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+            accuracyMeters: pos.coords.accuracy,
+            speedMps: pos.coords.speed,
+            webdriver: Boolean(navigator.webdriver)
+          });
+        }
+
+        function finishWithError(err) {
+          if (finished) return;
+          if (bestPos) {
+            finishWithPos(bestPos);
+            return;
+          }
+          finished = true;
+          if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+          if (fallbackTimer !== null) clearTimeout(fallbackTimer);
+          if (mode === 'strict') {
+            var reason = 'Akses lokasi ditolak oleh browser. Aktifkan izin Lokasi/GPS di pengaturan browser lalu tekan tombol di bawah.';
+            if (err && err.code === 2) reason = 'Sinyal GPS perangkat tidak tersedia. Pastikan layanan Lokasi (GPS) aktif.';
+            if (err && err.code === 3) reason = 'Waktu tunggu sinyal GPS habis. Coba lagi di area dengan sinyal lebih baik.';
+            showBlocked(reason);
+          } else {
             submitVerification({
-              gpsGranted: true,
-              lat: pos.coords.latitude,
-              lng: pos.coords.longitude,
-              accuracyMeters: pos.coords.accuracy,
-              speedMps: pos.coords.speed,
+              gpsGranted: false,
+              fallbackReason: err ? err.message : 'GPS ditolak',
               webdriver: Boolean(navigator.webdriver)
             });
-          },
-          function(err) {
-            if (mode === 'strict') {
-              var reason = 'Akses lokasi ditolak oleh browser. Aktifkan izin Lokasi/GPS di pengaturan browser lalu tekan tombol di bawah.';
-              if (err && err.code === 2) reason = 'Sinyal GPS perangkat tidak tersedia. Pastikan layanan Lokasi (GPS) aktif.';
-              if (err && err.code === 3) reason = 'Waktu tunggu sinyal GPS habis. Coba lagi di area dengan sinyal lebih baik.';
-              showBlocked(reason);
-            } else {
-              submitVerification({
-                gpsGranted: false,
-                fallbackReason: err ? err.message : 'GPS ditolak',
-                webdriver: Boolean(navigator.webdriver)
-              });
+          }
+        }
+
+        // Wait up to 12s for a high-accuracy GPS fix (<= 50m), keeping the most accurate reading received
+        fallbackTimer = setTimeout(function() {
+          if (bestPos) {
+            finishWithPos(bestPos);
+          } else {
+            finishWithError({ code: 3, message: 'Timeout menunggu kunci satelit GPS' });
+          }
+        }, 12000);
+
+        watchId = navigator.geolocation.watchPosition(
+          function(pos) {
+            if (!bestPos || (typeof pos.coords.accuracy === 'number' && pos.coords.accuracy < bestPos.coords.accuracy)) {
+              bestPos = pos;
+            }
+            if (typeof pos.coords.accuracy === 'number' && pos.coords.accuracy <= 50) {
+              finishWithPos(pos);
             }
           },
-          { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+          function(err) {
+            // Permission denied (code 1) fails immediately; timeout/unavailable waits for timer if watch still active
+            if (err && err.code === 1) {
+              finishWithError(err);
+            }
+          },
+          { enableHighAccuracy: true, timeout: 11000, maximumAge: 0 }
         );
       }
 
