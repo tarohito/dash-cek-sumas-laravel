@@ -3,8 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="apple-touch-icon" href="/favicon.svg" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2" />
+    <link rel="apple-touch-icon" href="/favicon.svg?v=2" />
     <title>Sumas Dashboard</title>
     <meta name="description" content="Dashboard Monitoring Geolokasi Pemindaian &amp; Manajemen Tag Fisik Sumas" />
     <meta property="og:title" content="Sumas Dashboard" />
