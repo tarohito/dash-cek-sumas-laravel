@@ -368,9 +368,8 @@ export const ProfileAccountPage: React.FC<ProfileAccountPageProps> = ({
                   >
                     {getInitials(name || user.name, 'U')}
                   </div>
-                  <span className="text-xs sm:text-sm font-semibold text-slate-700 dark:text-zinc-200 mb-0.5 inline-flex items-center gap-1.5">
-                    <Camera size={13} className="text-[#c28e62]" />
-                    <span>Unggah Foto Profil</span>
+                  <span className="text-xs sm:text-sm font-semibold text-slate-700 dark:text-zinc-200 mb-0.5">
+                    Unggah Foto Profil
                   </span>
                   <span className="text-[11px] text-slate-400 dark:text-zinc-500 max-w-[190px] leading-snug">
                     JPG, PNG, WEBP · Maks 5MB · 1:1
