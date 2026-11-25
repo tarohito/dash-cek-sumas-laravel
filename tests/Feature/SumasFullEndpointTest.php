@@ -350,8 +350,9 @@ class SumasFullEndpointTest extends TestCase
             ->where('batchId', $sampleBatch->batchId)
             ->where('reason', $reason)
             ->count();
+        $expectedNotifTitle = "Pembatalan Alokasi: {$sampleBatch->batchId}";
         $beforeNotifs = DB::table('notifications')
-            ->where('title', "Pengeditan Data: {$sampleBatch->batchId}")
+            ->where('title', $expectedNotifTitle)
             ->count();
 
         // Simulate user rapidly clicking 10x on a slow connection with a client clock skewed 1 hour behind server
@@ -369,12 +370,26 @@ class SumasFullEndpointTest extends TestCase
             ->where('batchId', $sampleBatch->batchId)
             ->where('reason', $reason)
             ->count();
+        $createdNotif = DB::table('notifications')
+            ->where('title', $expectedNotifTitle)
+            ->orderByDesc('createdAtTs')
+            ->first();
         $afterNotifs = DB::table('notifications')
-            ->where('title', "Pengeditan Data: {$sampleBatch->batchId}")
+            ->where('title', $expectedNotifTitle)
             ->count();
 
         $this->assertSame($beforeLogs + 1, $afterLogs, 'Rapid 10x clicks must only create 1 audit log even with client clock skew');
         $this->assertSame($beforeNotifs + 1, $afterNotifs, 'Rapid 10x clicks must only create 1 notification');
+        $this->assertNotNull($createdNotif);
+        $this->assertStringContainsString('Kalingga Jeandy', (string) $createdNotif->subtitle);
+        $this->assertSame($reason, (string) $createdNotif->description);
+        $this->assertTrue(
+            DB::table('read_notifications')
+                ->where('userId', $auth['user']['id'])
+                ->where('notificationId', $createdNotif->id)
+                ->exists(),
+            'Actor should have their own action notification auto-marked as read'
+        );
 
         // Verify double allocate & double deallocate are idempotent
         $b2bBatch = DB::table('batches')->where('isB2B', 1)->first();

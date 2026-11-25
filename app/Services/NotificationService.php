@@ -11,10 +11,14 @@ class NotificationService
 {
     public static function getActorLabel(array $actor): string
     {
+        $name = trim((string) ($actor['name'] ?? ''));
+        if ($name !== '') {
+            return $name;
+        }
         if (RbacService::normalizeRole($actor['role'] ?? null) === 'Super Admin') {
             return 'Administrator';
         }
-        return $actor['name'] ?? 'Sistem';
+        return 'Sistem';
     }
 
     public static function createNotification(array $input): void
@@ -67,6 +71,17 @@ class NotificationService
                     'dedupeKey' => $dedupeKey,
                     'createdAtTs' => $nowMs,
                 ]);
+
+                $actorUserId = isset($input['actorUserId']) ? trim((string) $input['actorUserId']) : '';
+                if ($actorUserId !== '') {
+                    try {
+                        DB::table('read_notifications')->updateOrInsert(
+                            ['userId' => $actorUserId, 'notificationId' => $id],
+                            ['readAt' => RbacService::formatIndonesianTimestamp()]
+                        );
+                    } catch (\Throwable) {
+                    }
+                }
             };
 
             // Use an atomic lock so concurrent rapid-click requests cannot race past the dedupe check

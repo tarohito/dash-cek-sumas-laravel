@@ -155,26 +155,59 @@ class AuditLogController extends Controller
         }
 
         $insertedId = $result['record']['id'];
-        $fieldParts = [];
-        foreach ($safeChanges as $c) {
-            if (is_array($c)) {
-                $field = $c['field'] ?? '';
-                $old = $c['old'] ?? '';
-                $new = $c['new'] ?? '';
-                $fieldParts[] = "{$field}: \"{$old}\" → \"{$new}\"";
+        $lowerReason = strtolower($safeReason);
+        $isDeallocate = str_contains($lowerReason, 'membatalkan alokasi');
+        $isAllocate = !$isDeallocate && str_starts_with($lowerReason, 'alokasi ');
+        $isSuspend = str_contains($lowerReason, 'suspensi') || str_contains($lowerReason, 'suspend');
+        $isRestore = str_contains($lowerReason, 'pemulihan');
+        $isRedirectUrl = str_contains($lowerReason, 'redirect') || str_contains($lowerReason, 'url');
+
+        if ($isDeallocate) {
+            $notifTitle = "Pembatalan Alokasi: {$batchIdStr}";
+        } elseif ($isAllocate) {
+            $notifTitle = "Alokasi Proyek: {$batchIdStr}";
+        } elseif ($isSuspend) {
+            $notifTitle = "Suspensi Batch: {$batchIdStr}";
+        } elseif ($isRestore) {
+            $notifTitle = "Pemulihan Batch: {$batchIdStr}";
+        } elseif ($isRedirectUrl) {
+            $notifTitle = "Pembaruan URL QR: {$batchIdStr}";
+        } else {
+            $notifTitle = "Pengeditan Data: {$batchIdStr}";
+        }
+
+        // Avoid repeating project info already stated in $safeReason for allocation/deallocation actions
+        $description = $safeReason;
+        if (!$isAllocate && !$isDeallocate) {
+            $fieldParts = [];
+            foreach ($safeChanges as $c) {
+                if (is_array($c)) {
+                    $field = trim((string) ($c['field'] ?? ''));
+                    $old = trim((string) ($c['old'] ?? ''));
+                    $new = trim((string) ($c['new'] ?? ''));
+                    if ($field !== '' && $new !== '') {
+                        $fieldParts[] = ($old !== '' && $old !== '-')
+                            ? "{$field}: {$old} → {$new}"
+                            : "{$field}: {$new}";
+                    }
+                }
+            }
+            $fieldSummary = implode(', ', $fieldParts);
+            if ($fieldSummary !== '') {
+                $description = "{$safeReason} · {$fieldSummary}";
             }
         }
-        $fieldSummary = implode(', ', $fieldParts);
 
         $brandName = $relatedBatch->brand ?? null;
         NotificationService::createNotification([
             'type' => 'edit',
-            'severity' => str_contains(strtolower($safeReason), 'suspend') ? 'warning' : 'info',
+            'severity' => $isSuspend ? 'warning' : 'info',
             'audience' => $brandName ? 'brand_scope' : 'super_admin',
             'brandName' => $brandName,
-            'title' => "Pengeditan Data: {$batchIdStr}",
-            'subtitle' => "Dilakukan oleh {$actorLabel}" . ($brandName ? " · {$brandName}" : ''),
-            'description' => $safeReason . ($fieldSummary !== '' ? " ({$fieldSummary})" : ''),
+            'actorUserId' => $authUser['id'] ?? null,
+            'title' => $notifTitle,
+            'subtitle' => "Oleh {$actorLabel}" . ($brandName ? " · {$brandName}" : ''),
+            'description' => $description,
             'entityType' => 'audit_log',
             'entityId' => (string) $insertedId,
             'status' => 'edited',
