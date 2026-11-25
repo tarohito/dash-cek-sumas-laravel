@@ -354,9 +354,11 @@ class SumasFullEndpointTest extends TestCase
             ->where('title', "Pengeditan Data: {$sampleBatch->batchId}")
             ->count();
 
-        // Simulate user rapidly clicking 10x on a slow connection
+        // Simulate user rapidly clicking 10x on a slow connection with a client clock skewed 1 hour behind server
+        $skewedClientId = (time() - 3600) * 1000;
         for ($i = 0; $i < 10; $i++) {
             $this->authedMutation($auth, 'POST', '/api/audit-logs', [
+                'id' => $skewedClientId + $i,
                 'batchId' => $sampleBatch->batchId,
                 'reason' => $reason,
                 'changes' => $changes,
@@ -371,7 +373,42 @@ class SumasFullEndpointTest extends TestCase
             ->where('title', "Pengeditan Data: {$sampleBatch->batchId}")
             ->count();
 
-        $this->assertSame($beforeLogs + 1, $afterLogs, 'Rapid 10x clicks must only create 1 audit log');
+        $this->assertSame($beforeLogs + 1, $afterLogs, 'Rapid 10x clicks must only create 1 audit log even with client clock skew');
         $this->assertSame($beforeNotifs + 1, $afterNotifs, 'Rapid 10x clicks must only create 1 notification');
+
+        // Verify double allocate & double deallocate are idempotent
+        $b2bBatch = DB::table('batches')->where('isB2B', 1)->first();
+        $this->assertNotNull($b2bBatch);
+        $availTags = DB::table('tags')
+            ->where('batchId', $b2bBatch->id)
+            ->where('status', 'Tersedia')
+            ->limit(2)
+            ->pluck('id')
+            ->all();
+        $this->assertNotEmpty($availTags);
+
+        $alloc1 = $this->authedMutation($auth, 'POST', "/api/batches/{$b2bBatch->id}/allocate", [
+            'tagIds' => $availTags,
+            'project' => 'QA Idempotent Project',
+            'specs' => 'Phenolic',
+        ])->assertSuccessful();
+        $this->assertSame(count($availTags), $alloc1->json('allocatedCount'));
+
+        $alloc2 = $this->authedMutation($auth, 'POST', "/api/batches/{$b2bBatch->id}/allocate", [
+            'tagIds' => $availTags,
+            'project' => 'QA Idempotent Project',
+            'specs' => 'Phenolic',
+        ])->assertSuccessful();
+        $this->assertSame(0, $alloc2->json('allocatedCount'), 'Duplicate allocate must affect 0 tags');
+
+        $dealloc1 = $this->authedMutation($auth, 'POST', "/api/batches/{$b2bBatch->id}/deallocate", [
+            'project' => 'QA Idempotent Project',
+        ])->assertSuccessful();
+        $this->assertSame(count($availTags), $dealloc1->json('deallocatedCount'));
+
+        $dealloc2 = $this->authedMutation($auth, 'POST', "/api/batches/{$b2bBatch->id}/deallocate", [
+            'project' => 'QA Idempotent Project',
+        ])->assertSuccessful();
+        $this->assertSame(0, $dealloc2->json('deallocatedCount'), 'Duplicate deallocate must affect 0 tags');
     }
 }

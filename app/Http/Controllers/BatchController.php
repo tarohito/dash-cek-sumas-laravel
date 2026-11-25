@@ -630,28 +630,40 @@ class BatchController extends Controller
             'allocatedAt' => $allocatedAt,
         ];
 
-        foreach (array_chunk($tagIds, 400) as $chunk) {
-            DB::table('tags')
+        $runAllocate = function () use ($decodedId, $tagIds, $updatePayload): int {
+            $affected = 0;
+            foreach (array_chunk($tagIds, 400) as $chunk) {
+                $affected += DB::table('tags')
+                    ->where('batchId', $decodedId)
+                    ->where('status', 'Tersedia')
+                    ->whereIn('id', $chunk)
+                    ->update($updatePayload);
+            }
+
+            $distinctProjects = DB::table('tags')
                 ->where('batchId', $decodedId)
-                ->whereIn('id', $chunk)
-                ->update($updatePayload);
+                ->whereNotNull('project')
+                ->where('status', 'Telah Digunakan')
+                ->distinct()
+                ->pluck('project')
+                ->all();
+
+            DB::table('batches')->where('id', $decodedId)->update([
+                'project' => count($distinctProjects) > 0 ? implode(', ', $distinctProjects) : null,
+            ]);
+
+            return $affected;
+        };
+
+        try {
+            $allocatedCount = \Illuminate\Support\Facades\Cache::lock("batch_alloc:{$decodedId}", 5)->block(3, $runAllocate);
+        } catch (\Throwable) {
+            $allocatedCount = $runAllocate();
         }
-
-        $distinctProjects = DB::table('tags')
-            ->where('batchId', $decodedId)
-            ->whereNotNull('project')
-            ->where('status', 'Telah Digunakan')
-            ->distinct()
-            ->pluck('project')
-            ->all();
-
-        DB::table('batches')->where('id', $decodedId)->update([
-            'project' => count($distinctProjects) > 0 ? implode(', ', $distinctProjects) : null,
-        ]);
 
         return response()->json([
             'success' => true,
-            'allocatedCount' => count($tagIds),
+            'allocatedCount' => $allocatedCount,
             'project' => $cleanProject,
             'allocatedAt' => $allocatedAt,
         ]);
@@ -676,31 +688,42 @@ class BatchController extends Controller
             return response()->json(['error' => 'Operasi alokasi proyek hanya berlaku untuk brand/batch B2B.'], 403);
         }
 
-        $deallocatedCount = DB::table('tags')
-            ->where('batchId', $decodedId)
-            ->where('project', $project)
-            ->update([
-                'status' => 'Tersedia',
-                'project' => null,
-                'specs' => '-',
-                'codeType' => '-',
-                'warranty' => '-',
-                'prodCode' => '-',
-                'note' => '-',
-                'allocatedAt' => null,
+        $runDeallocate = function () use ($decodedId, $project): int {
+            $affected = DB::table('tags')
+                ->where('batchId', $decodedId)
+                ->where('project', $project)
+                ->where('status', 'Telah Digunakan')
+                ->update([
+                    'status' => 'Tersedia',
+                    'project' => null,
+                    'specs' => '-',
+                    'codeType' => '-',
+                    'warranty' => '-',
+                    'prodCode' => '-',
+                    'note' => '-',
+                    'allocatedAt' => null,
+                ]);
+
+            $distinctProjects = DB::table('tags')
+                ->where('batchId', $decodedId)
+                ->whereNotNull('project')
+                ->where('status', 'Telah Digunakan')
+                ->distinct()
+                ->pluck('project')
+                ->all();
+
+            DB::table('batches')->where('id', $decodedId)->update([
+                'project' => count($distinctProjects) > 0 ? implode(', ', $distinctProjects) : null,
             ]);
 
-        $distinctProjects = DB::table('tags')
-            ->where('batchId', $decodedId)
-            ->whereNotNull('project')
-            ->where('status', 'Telah Digunakan')
-            ->distinct()
-            ->pluck('project')
-            ->all();
+            return $affected;
+        };
 
-        DB::table('batches')->where('id', $decodedId)->update([
-            'project' => count($distinctProjects) > 0 ? implode(', ', $distinctProjects) : null,
-        ]);
+        try {
+            $deallocatedCount = \Illuminate\Support\Facades\Cache::lock("batch_dealloc:{$decodedId}:" . sha1($project), 5)->block(3, $runDeallocate);
+        } catch (\Throwable) {
+            $deallocatedCount = $runDeallocate();
+        }
 
         return response()->json([
             'success' => true,

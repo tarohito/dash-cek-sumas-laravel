@@ -4081,7 +4081,7 @@ export default function App() {
     setBusyBatchAction('allocate');
 
     try {
-      await api.allocateTags(activeBatch.id, {
+      const allocRes = await api.allocateTags(activeBatch.id, {
         tagIds: selectedTagsToAllocate,
         project: allocationForm.project.trim(),
         specs: allocationForm.specs.trim(),
@@ -4091,17 +4091,20 @@ export default function App() {
         note: allocationForm.note.trim() || '-'
       });
 
-      const newLog = {
-        id: Date.now(),
-        batchId: activeBatch.batchId,
-        timestamp: new Date().toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }),
-        user: currentUser?.name || currentRole,
-        reason: `Alokasi ${selectedTagsToAllocate.length} tag untuk proyek: ${allocationForm.project.trim()}`,
-        changes: [
-          { field: 'Alokasi Proyek', old: 'Tersedia', new: `${allocationForm.project.trim()} (${selectedTagsToAllocate.length} Tag)` }
-        ]
-      };
-      await api.createAuditLog(newLog);
+      if (allocRes?.allocatedCount !== 0) {
+        const actualCount = typeof allocRes?.allocatedCount === 'number' ? allocRes.allocatedCount : selectedTagsToAllocate.length;
+        const newLog = {
+          id: Date.now(),
+          batchId: activeBatch.batchId,
+          timestamp: new Date().toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }),
+          user: currentUser?.name || currentRole,
+          reason: `Alokasi ${actualCount} tag untuk proyek: ${allocationForm.project.trim()}`,
+          changes: [
+            { field: 'Alokasi Proyek', old: 'Tersedia', new: `${allocationForm.project.trim()} (${actualCount} Tag)` }
+          ]
+        };
+        await api.createAuditLog(newLog);
+      }
 
       const [freshBatches, freshLogs] = await Promise.all([api.getBatches(), api.getAuditLogs()]);
       if (Array.isArray(freshBatches)) setBatches(freshBatches);

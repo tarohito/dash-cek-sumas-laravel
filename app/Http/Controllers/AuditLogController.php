@@ -77,8 +77,8 @@ class AuditLogController extends Controller
         $authUser = $this->authUser($request);
         $actorLabel = $this->actorLabel($request);
         $nowMs = (int) round(microtime(true) * 1000);
-        $rawId = $log['id'] ?? null;
-        $safeId = (is_numeric($rawId) && (int) $rawId > 0) ? (int) $rawId : $nowMs;
+        // Always anchor audit_logs.id to server clock so client/server clock skew never bypasses deduplication
+        $safeId = $nowMs;
         $safeTimestamp = SecurityHardeningService::sanitizeStringInput($log['timestamp'] ?? '', 80) ?: RbacService::formatIndonesianTimestamp();
         $safeReason = SecurityHardeningService::sanitizeStringInput($log['reason'] ?? '', 400) ?: 'Pembaruan data';
         $safeChanges = is_array($log['changes'] ?? null) ? array_slice($log['changes'], 0, 50) : [];
