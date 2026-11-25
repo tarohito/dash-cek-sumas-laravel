@@ -15,7 +15,6 @@ import {
   ChevronDown,
   ChevronRight,
 } from 'lucide-react';
-import { NewBadge } from './NewBadge';
 
 export type NotificationCategoryFilter = 'all' | 'important' | 'reset' | 'scan' | 'edit';
 
@@ -366,7 +365,6 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({
                             >
                               {item.title}
                             </p>
-                            <NewBadge date={item.createdAtTs ?? item.timestamp} size="xs" />
                           </div>
 
                           <div className="flex items-center gap-1 shrink-0 pt-0.5">
