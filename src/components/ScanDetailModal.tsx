@@ -665,9 +665,9 @@ export const ScanDetailModal: React.FC<ScanDetailModalProps> = ({
                     {/* KONTEN EXPANDED AKORDEON (SMOOTH & JELAS) */}
                     {isExpanded && (
                       <div className="px-4 pb-3.5 pt-1 border-t border-slate-100 dark:border-zinc-700/60 grid grid-cols-1 sm:grid-cols-3 gap-3 animate-in fade-in duration-150">
-                        <div>
+                        <div className="min-w-0">
                           <span className="text-slate-400 dark:text-zinc-500 text-[11px] block">Lokasi & Koordinat</span>
-                          <span className="font-semibold text-slate-800 dark:text-zinc-200 block mt-0.5">
+                          <span className="font-semibold text-slate-800 dark:text-zinc-200 block mt-0.5 truncate">
                             {item.city}, {item.province}
                           </span>
                           {item.venue && <span className="text-slate-500 dark:text-zinc-400 block text-[11px] truncate">{item.venue}</span>}
@@ -683,20 +683,23 @@ export const ScanDetailModal: React.FC<ScanDetailModalProps> = ({
                           </a>
                         </div>
 
-                        <div>
+                        <div className="min-w-0">
                           <span className="text-slate-400 dark:text-zinc-500 text-[11px] block">Jaringan & IP</span>
-                          <span className="font-mono font-semibold text-slate-800 dark:text-zinc-200 block mt-0.5">
+                          <span
+                            className="font-mono font-semibold text-slate-800 dark:text-zinc-200 block mt-0.5 truncate text-[11px] sm:text-xs"
+                            title={item.ipAddress}
+                          >
                             {item.ipAddress}
                           </span>
-                          <span className="text-slate-500 dark:text-zinc-400 block text-[11px]">
+                          <span className="text-slate-500 dark:text-zinc-400 block text-[11px] truncate">
                             {item.isp}
                           </span>
-                          <span className="text-slate-400 dark:text-zinc-500 text-[11px] block mt-0.5">
+                          <span className="text-slate-400 dark:text-zinc-500 text-[11px] block mt-0.5 truncate">
                             {getLocationSourceLabel(item)}
                           </span>
                         </div>
 
-                        <div>
+                        <div className="min-w-0">
                           <span className="text-slate-400 dark:text-zinc-500 text-[11px] block">Perangkat & Catatan</span>
                           <span className="font-medium text-slate-800 dark:text-zinc-200 block mt-0.5 truncate" title={formatScanDevice(item.device, item.browser)}>
                             {formatScanDevice(item.device, item.browser)}
