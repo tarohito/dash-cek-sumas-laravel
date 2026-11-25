@@ -7,6 +7,7 @@ use App\Services\RbacService;
 use App\Services\SecurityHardeningService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class AuditLogController extends Controller
@@ -75,21 +76,85 @@ class AuditLogController extends Controller
 
         $authUser = $this->authUser($request);
         $actorLabel = $this->actorLabel($request);
+        $nowMs = (int) round(microtime(true) * 1000);
         $rawId = $log['id'] ?? null;
-        $safeId = (is_numeric($rawId) && (int) $rawId > 0) ? (int) $rawId : (int) round(microtime(true) * 1000);
+        $safeId = (is_numeric($rawId) && (int) $rawId > 0) ? (int) $rawId : $nowMs;
         $safeTimestamp = SecurityHardeningService::sanitizeStringInput($log['timestamp'] ?? '', 80) ?: RbacService::formatIndonesianTimestamp();
         $safeReason = SecurityHardeningService::sanitizeStringInput($log['reason'] ?? '', 400) ?: 'Pembaruan data';
         $safeChanges = is_array($log['changes'] ?? null) ? array_slice($log['changes'], 0, 50) : [];
+        $encodedChanges = json_encode($safeChanges) ?: '[]';
 
-        DB::table('audit_logs')->insert([
-            'id' => $safeId,
-            'batchId' => $batchIdStr,
-            'timestamp' => $safeTimestamp,
-            'user' => $authUser['name'],
-            'reason' => $safeReason,
-            'changes' => json_encode($safeChanges),
-        ]);
+        $dedupeWindowMs = 15000;
+        $fingerprint = sha1($batchIdStr . '|' . $authUser['name'] . '|' . $safeReason . '|' . $encodedChanges);
 
+        $writeFn = function () use (
+            $batchIdStr, $authUser, $safeReason, $encodedChanges, $safeChanges,
+            $safeId, $safeTimestamp, $nowMs, $dedupeWindowMs
+        ): array {
+            $existing = DB::table('audit_logs')
+                ->where('batchId', $batchIdStr)
+                ->where('user', $authUser['name'])
+                ->where('reason', $safeReason)
+                ->where('changes', $encodedChanges)
+                ->where('id', '>=', $nowMs - $dedupeWindowMs)
+                ->orderByDesc('id')
+                ->first();
+
+            if ($existing) {
+                $decoded = json_decode((string) ($existing->changes ?? '[]'), true);
+                return [
+                    'deduplicated' => true,
+                    'record' => [
+                        'id' => (int) $existing->id,
+                        'batchId' => $existing->batchId,
+                        'timestamp' => $existing->timestamp,
+                        'user' => $existing->user,
+                        'reason' => $existing->reason,
+                        'changes' => is_array($decoded) ? $decoded : [],
+                        'deduplicated' => true,
+                    ],
+                ];
+            }
+
+            // Ensure unique primary key if another insert occurred on the exact same millisecond
+            $insertId = $safeId;
+            while (DB::table('audit_logs')->where('id', $insertId)->exists()) {
+                $insertId++;
+            }
+
+            DB::table('audit_logs')->insert([
+                'id' => $insertId,
+                'batchId' => $batchIdStr,
+                'timestamp' => $safeTimestamp,
+                'user' => $authUser['name'],
+                'reason' => $safeReason,
+                'changes' => $encodedChanges,
+            ]);
+
+            return [
+                'deduplicated' => false,
+                'record' => [
+                    'id' => $insertId,
+                    'batchId' => $batchIdStr,
+                    'timestamp' => $safeTimestamp,
+                    'user' => $authUser['name'],
+                    'reason' => $safeReason,
+                    'changes' => $safeChanges,
+                ],
+            ];
+        };
+
+        try {
+            $result = Cache::lock("audit_dedupe:{$fingerprint}", 5)->block(3, $writeFn);
+        } catch (\Throwable) {
+            $result = $writeFn();
+        }
+
+        if (!empty($result['deduplicated'])) {
+            return response()->json($result['record']);
+        }
+
+        $insertedId = $result['record']['id'];
         $fieldParts = [];
         foreach ($safeChanges as $c) {
             if (is_array($c)) {
@@ -111,10 +176,10 @@ class AuditLogController extends Controller
             'subtitle' => "Dilakukan oleh {$actorLabel}" . ($brandName ? " · {$brandName}" : ''),
             'description' => $safeReason . ($fieldSummary !== '' ? " ({$fieldSummary})" : ''),
             'entityType' => 'audit_log',
-            'entityId' => (string) $safeId,
+            'entityId' => (string) $insertedId,
             'status' => 'edited',
-            'dedupeKey' => "audit:{$batchIdStr}:{$safeReason}",
-            'dedupeWindowMs' => 5000,
+            'dedupeKey' => "audit:{$batchIdStr}:{$fingerprint}",
+            'dedupeWindowMs' => $dedupeWindowMs,
             'metadata' => [
                 'user' => $actorLabel,
                 'batchId' => $batchIdStr,
@@ -123,13 +188,6 @@ class AuditLogController extends Controller
             ],
         ]);
 
-        return response()->json([
-            'id' => $safeId,
-            'batchId' => $batchIdStr,
-            'timestamp' => $safeTimestamp,
-            'user' => $authUser['name'],
-            'reason' => $safeReason,
-            'changes' => $safeChanges,
-        ]);
+        return response()->json($result['record']);
     }
 }

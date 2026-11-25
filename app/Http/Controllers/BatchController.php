@@ -676,7 +676,7 @@ class BatchController extends Controller
             return response()->json(['error' => 'Operasi alokasi proyek hanya berlaku untuk brand/batch B2B.'], 403);
         }
 
-        DB::table('tags')
+        $deallocatedCount = DB::table('tags')
             ->where('batchId', $decodedId)
             ->where('project', $project)
             ->update([
@@ -702,7 +702,11 @@ class BatchController extends Controller
             'project' => count($distinctProjects) > 0 ? implode(', ', $distinctProjects) : null,
         ]);
 
-        return response()->json(['success' => true, 'deallocatedProject' => $project]);
+        return response()->json([
+            'success' => true,
+            'deallocatedProject' => $project,
+            'deallocatedCount' => $deallocatedCount,
+        ]);
     }
 
     public function updateProjects(Request $request, string $id): JsonResponse

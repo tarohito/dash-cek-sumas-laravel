@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
@@ -20,9 +21,25 @@ class NotificationService
     {
         try {
             $nowMs = $input['createdAtTs'] ?? (int) round(microtime(true) * 1000);
-            $dedupeKey = $input['dedupeKey'] ?? null;
-            if ($dedupeKey) {
-                $windowMs = (int) ($input['dedupeWindowMs'] ?? 30000);
+            $rawDedupeKey = isset($input['dedupeKey']) && is_string($input['dedupeKey'])
+                ? trim($input['dedupeKey'])
+                : '';
+
+            // Always derive a fallback dedupeKey so rapid repeated clicks never spam duplicate notifications
+            $dedupeKey = $rawDedupeKey !== ''
+                ? substr($rawDedupeKey, 0, 191)
+                : ('auto:' . sha1(json_encode([
+                    $input['type'] ?? '',
+                    $input['audience'] ?? 'brand_scope',
+                    $input['targetUserId'] ?? null,
+                    $input['brandName'] ?? null,
+                    $input['title'] ?? '',
+                    $input['description'] ?? '',
+                ])));
+
+            $windowMs = max(10000, (int) ($input['dedupeWindowMs'] ?? 15000));
+
+            $insertFn = function () use ($input, $nowMs, $dedupeKey, $windowMs): void {
                 $existing = DB::table('notifications')
                     ->where('dedupeKey', $dedupeKey)
                     ->orderByDesc('createdAtTs')
@@ -30,27 +47,34 @@ class NotificationService
                 if ($existing && ($nowMs - (int) $existing->createdAtTs) < $windowMs) {
                     return;
                 }
-            }
 
-            $id = $input['id'] ?? ('notif-' . $nowMs . '-' . bin2hex(random_bytes(3)));
-            DB::table('notifications')->insert([
-                'id' => $id,
-                'type' => $input['type'],
-                'severity' => $input['severity'] ?? 'info',
-                'audience' => $input['audience'] ?? 'brand_scope',
-                'targetUserId' => $input['targetUserId'] ?? null,
-                'brandName' => $input['brandName'] ?? null,
-                'brandId' => $input['brandId'] ?? null,
-                'title' => $input['title'],
-                'subtitle' => $input['subtitle'] ?? '',
-                'description' => $input['description'] ?? '',
-                'entityType' => $input['entityType'] ?? null,
-                'entityId' => $input['entityId'] ?? null,
-                'status' => $input['status'] ?? 'info',
-                'metadata' => isset($input['metadata']) ? json_encode($input['metadata']) : null,
-                'dedupeKey' => $dedupeKey,
-                'createdAtTs' => $nowMs,
-            ]);
+                $id = $input['id'] ?? ('notif-' . $nowMs . '-' . bin2hex(random_bytes(3)));
+                DB::table('notifications')->insert([
+                    'id' => $id,
+                    'type' => $input['type'],
+                    'severity' => $input['severity'] ?? 'info',
+                    'audience' => $input['audience'] ?? 'brand_scope',
+                    'targetUserId' => $input['targetUserId'] ?? null,
+                    'brandName' => $input['brandName'] ?? null,
+                    'brandId' => $input['brandId'] ?? null,
+                    'title' => $input['title'],
+                    'subtitle' => $input['subtitle'] ?? '',
+                    'description' => $input['description'] ?? '',
+                    'entityType' => $input['entityType'] ?? null,
+                    'entityId' => $input['entityId'] ?? null,
+                    'status' => $input['status'] ?? 'info',
+                    'metadata' => isset($input['metadata']) ? json_encode($input['metadata']) : null,
+                    'dedupeKey' => $dedupeKey,
+                    'createdAtTs' => $nowMs,
+                ]);
+            };
+
+            // Use an atomic lock so concurrent rapid-click requests cannot race past the dedupe check
+            try {
+                Cache::lock('notif_dedupe:' . sha1($dedupeKey), 5)->block(3, $insertFn);
+            } catch (\Throwable) {
+                $insertFn();
+            }
         } catch (\Throwable) {
         }
     }

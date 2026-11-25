@@ -934,12 +934,29 @@ export default function App() {
       return parseApiResponse(res, 'Gagal memuat audit log');
     },
     async createAuditLog(log: any) {
-      const res = await apiFetch('/api/audit-logs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(log),
-      });
-      return parseApiResponse(res, 'Gagal menyimpan log');
+      const dedupeKey = `${log?.batchId || ''}|${log?.reason || ''}|${JSON.stringify(log?.changes || [])}`;
+      const win = window as any;
+      if (!win.__sumasInFlightAuditLogs) {
+        win.__sumasInFlightAuditLogs = new Map<string, Promise<any>>();
+      }
+      const inFlightMap: Map<string, Promise<any>> = win.__sumasInFlightAuditLogs;
+      if (inFlightMap.has(dedupeKey)) {
+        return inFlightMap.get(dedupeKey);
+      }
+      const reqPromise = (async () => {
+        try {
+          const res = await apiFetch('/api/audit-logs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(log),
+          });
+          return await parseApiResponse(res, 'Gagal menyimpan log');
+        } finally {
+          inFlightMap.delete(dedupeKey);
+        }
+      })();
+      inFlightMap.set(dedupeKey, reqPromise);
+      return reqPromise;
     },
     async getDashboardStats() {
       const res = await apiFetch('/api/dashboard/stats');
@@ -1242,6 +1259,9 @@ export default function App() {
   const [rbacMatrix, setRbacMatrix] = useState<RbacMatrix>(DEFAULT_ROLE_PERMISSIONS);
   const [rbacDraft, setRbacDraft] = useState<RbacMatrix>(DEFAULT_ROLE_PERMISSIONS);
   const [isSavingRbac, setIsSavingRbac] = useState(false);
+  const inFlightBatchActionsRef = useRef<Set<string>>(new Set());
+  const [busyBatchAction, setBusyBatchAction] = useState<string | null>(null);
+  const [tagsLoadError, setTagsLoadError] = useState<string | null>(null);
   const [usersSubTab, setUsersSubTab] = useState<'list' | 'rbac'>('list');
 
   useEffect(() => {
@@ -3980,6 +4000,7 @@ export default function App() {
 
   const loadBatchDetailData = async (batchId: string, page = 1, search = '', filter = 'all') => {
     setIsTagsLoading(true);
+    setTagsLoadError(null);
     try {
       const statusParam = filter === 'available' ? 'Tersedia' : filter === 'used' ? 'Telah Digunakan' : 'all';
       const projectParam = (filter !== 'all' && filter !== 'available' && filter !== 'used') ? filter : 'all';
@@ -4001,8 +4022,9 @@ export default function App() {
         setTagsPage(tagsRes.page || 1);
         setTagsTotalPages(tagsRes.totalPages || 1);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Gagal memuat data batch:', err);
+      setTagsLoadError(err?.message || 'Koneksi ke server terputus saat memuat daftar tag.');
     } finally {
       setIsTagsLoading(false);
     }
@@ -4053,6 +4075,11 @@ export default function App() {
     if (!allocationForm.project.trim() || !allocationForm.specs.trim() || !activeBatch) return;
     if (selectedTagsToAllocate.length === 0) return;
 
+    const lockKey = `allocate:${activeBatch.id}`;
+    if (inFlightBatchActionsRef.current.has(lockKey)) return;
+    inFlightBatchActionsRef.current.add(lockKey);
+    setBusyBatchAction('allocate');
+
     try {
       await api.allocateTags(activeBatch.id, {
         tagIds: selectedTagsToAllocate,
@@ -4091,33 +4118,43 @@ export default function App() {
       setSelectedTagsToAllocate([]);
       setIsAllocateModalOpen(false);
       setAllocationForm({ project: '', codeType: '', specs: '', warranty: '', prodCode: '', note: '' });
-    } catch (err) {
+    } catch (err: any) {
       console.error('Gagal simpan alokasi ke database:', err);
       triggerAlert(
         'Gagal Menyimpan Alokasi',
-        'Terjadi kesalahan saat menyimpan alokasi tag ke proyek.',
+        err?.message || 'Terjadi kesalahan saat menyimpan alokasi tag ke proyek.',
         'error'
       );
+    } finally {
+      inFlightBatchActionsRef.current.delete(lockKey);
+      setBusyBatchAction(null);
     }
   };
 
   const handleDeallocateProject = async (projectName: string) => {
     if (!activeBatch) return;
 
+    const lockKey = `deallocate:${activeBatch.id}:${projectName}`;
+    if (inFlightBatchActionsRef.current.has(lockKey)) return;
+    inFlightBatchActionsRef.current.add(lockKey);
+    setBusyBatchAction('deallocate');
+
     try {
-      await api.deallocateProject(activeBatch.id, projectName);
-      
-      const newLog = {
-        id: Date.now(),
-        batchId: activeBatch.batchId,
-        timestamp: new Date().toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }),
-        user: currentUser?.name || currentRole,
-        reason: `Membatalkan alokasi proyek: ${projectName}`,
-        changes: [
-          { field: 'Alokasi Proyek', old: projectName, new: 'Tersedia Kembali' }
-        ]
-      };
-      await api.createAuditLog(newLog);
+      const deallocRes = await api.deallocateProject(activeBatch.id, projectName);
+
+      if (deallocRes?.deallocatedCount !== 0) {
+        const newLog = {
+          id: Date.now(),
+          batchId: activeBatch.batchId,
+          timestamp: new Date().toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }),
+          user: currentUser?.name || currentRole,
+          reason: `Membatalkan alokasi proyek: ${projectName}`,
+          changes: [
+            { field: 'Alokasi Proyek', old: projectName, new: 'Tersedia Kembali' }
+          ]
+        };
+        await api.createAuditLog(newLog);
+      }
 
       const [freshBatches, freshLogs] = await Promise.all([api.getBatches(), api.getAuditLogs()]);
       if (Array.isArray(freshBatches)) setBatches(freshBatches);
@@ -4131,13 +4168,16 @@ export default function App() {
         `Seluruh tag proyek "${projectName}" berhasil dikembalikan ke status Tersedia.`,
         'success'
       );
-    } catch (err) {
+    } catch (err: any) {
       console.error('Gagal membatalkan alokasi:', err);
       triggerAlert(
         'Gagal Membatalkan Alokasi',
-        'Terjadi kesalahan saat mengembalikan tag proyek ke stok.',
+        err?.message || 'Terjadi kesalahan saat mengembalikan tag proyek ke stok.',
         'error'
       );
+    } finally {
+      inFlightBatchActionsRef.current.delete(lockKey);
+      setBusyBatchAction(null);
     }
   };
 
@@ -8832,14 +8872,15 @@ export default function App() {
               </button>
               <button
                 type="button"
+                disabled={busyBatchAction === 'deallocate'}
                 onClick={async () => {
                   const projName = deallocatingProject.name;
                   setDeallocatingProject(null);
                   await handleDeallocateProject(projName);
                 }}
-                className="w-full sm:w-auto h-10 px-5 rounded-full bg-rose-600 hover:bg-rose-700 text-white text-xs sm:text-sm font-semibold inline-flex items-center justify-center transition-all cursor-pointer whitespace-nowrap active:scale-95"
+                className="w-full sm:w-auto h-10 px-5 rounded-full bg-rose-600 hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs sm:text-sm font-semibold inline-flex items-center justify-center transition-all cursor-pointer whitespace-nowrap active:scale-95"
               >
-                Ya, Lepas Alokasi
+                {busyBatchAction === 'deallocate' ? 'Memproses...' : 'Ya, Lepas Alokasi'}
               </button>
             </div>
           </div>
@@ -8978,10 +9019,10 @@ export default function App() {
                 <button 
                   type="button"
                   onClick={handleSaveAllocation}
-                  disabled={!allocationForm.project || !allocationForm.specs}
+                  disabled={!allocationForm.project || !allocationForm.specs || busyBatchAction === 'allocate'}
                   className="w-full sm:w-auto h-10 px-5 rounded-full bg-[#c28e62] hover:bg-[#b07d53] disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs sm:text-sm font-semibold inline-flex items-center justify-center transition-all cursor-pointer whitespace-nowrap active:scale-95"
                 >
-                  <span>Simpan &amp; Alokasikan</span>
+                  <span>{busyBatchAction === 'allocate' ? 'Menyimpan...' : 'Simpan & Alokasikan'}</span>
                 </button>
               </div>
             </div>
@@ -9450,6 +9491,16 @@ export default function App() {
                           );
                         })}
                       </div>
+                    ) : tagsLoadError ? (
+                      <EmptyStatePanel
+                        icon={<AlertTriangle size={22} className="stroke-[1.8] text-amber-500" />}
+                        title="Gagal Memuat Daftar Tag"
+                        description={tagsLoadError}
+                        actionLabel="Muat Ulang Tag"
+                        onAction={() => {
+                          if (activeBatch) loadBatchDetailData(activeBatch.id, tagsPage, tagSearch, tagProjectFilter);
+                        }}
+                      />
                     ) : (
                       <EmptyStatePanel
                         icon={<QrCode size={22} className="stroke-[1.8]" />}
@@ -9615,52 +9666,94 @@ export default function App() {
               )}
 
               {/* TAB 3: RIWAYAT PERUBAHAN */}
-              {activeTab === 'history' && (
-                <div className="flex-1 overflow-y-auto pr-2">
-                  {auditLogs.filter(log => log.batchId === activeBatch?.batchId).length > 0 ? (
-                    <div className="space-y-4 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px before:h-full before:w-0.5 before:bg-slate-200 dark:before:bg-zinc-700">
-                      {auditLogs.filter(log => log.batchId === activeBatch?.batchId).map(log => (
-                        <div key={log.id} className="relative flex items-start gap-4">
-                          <div className="absolute left-0 w-10 h-10 flex items-center justify-center">
-                            <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-zinc-800 border-2 border-white dark:border-zinc-900 flex items-center justify-center text-slate-500 dark:text-zinc-400 z-10">
-                              <Edit3 size={14} />
-                            </div>
-                          </div>
-                          <div className="ml-12 bg-white dark:bg-zinc-900 border border-slate-100 dark:border-zinc-700 rounded-xl p-3 sm:p-4 flex-1 text-xs sm:text-sm">
-                            <div className="flex items-center justify-between gap-2 mb-2">
-                              <div className="flex items-center gap-2 min-w-0">
-                                <span className="font-bold text-slate-700 dark:text-zinc-200 truncate">{log.user}</span>
-                                <NewBadge date={log.timestamp} id={String(log.id)} size="xs" />
-                              </div>
-                              <span className="text-[10px] sm:text-xs text-slate-400 dark:text-zinc-500 shrink-0">{log.timestamp}</span>
-                            </div>
-                            <div className="mb-3">
-                              <span className="text-[10px] sm:text-xs font-semibold text-slate-500 dark:text-zinc-400 block mb-1">Alasan Perubahan:</span>
-                              <p className="text-slate-700 dark:text-zinc-300 bg-slate-50 dark:bg-zinc-800 p-2.5 rounded-xl border border-transparent dark:border-zinc-700">{log.reason}</p>
-                            </div>
-                            <div className="space-y-2">
-                              {log.changes.map((change: any, idx: number) => (
-                                <div key={idx} className="flex items-center gap-2 bg-slate-50/50 dark:bg-zinc-800/50 p-2.5 rounded-xl border border-slate-100 dark:border-zinc-700 text-xs">
-                                  <span className="font-semibold text-slate-600 dark:text-zinc-400 min-w-[70px]">{change.field}:</span>
-                                  <span className="text-rose-500 dark:text-rose-400 line-through text-[11px]">{change.old}</span>
-                                  <span className="text-slate-400 dark:text-zinc-500">→</span>
-                                  <span className="text-emerald-600 dark:text-emerald-400 font-medium text-[11px]">{change.new}</span>
+              {activeTab === 'history' && (() => {
+                const batchLogs = auditLogs.filter(log => log.batchId === activeBatch?.batchId);
+                return (
+                  <div className="flex-1 overflow-y-auto pr-2">
+                    {batchLogs.length > 0 ? (
+                      <ol className="relative pl-5 ml-1.5 my-1 before:content-[''] before:absolute before:left-[4px] before:top-2 before:bottom-2 before:w-px before:bg-slate-200 dark:before:bg-zinc-800">
+                        {batchLogs.map((log, logIdx) => {
+                          const changesList = Array.isArray(log.changes) ? log.changes : [];
+                          const isLatest = logIdx === 0;
+                          return (
+                            <li key={log.id} className="relative pb-5 last:pb-1">
+                              {/* Titik Timeline Minimalis */}
+                              <span
+                                className={`absolute -left-5 top-1.5 w-2.5 h-2.5 rounded-full ring-4 ring-white dark:ring-zinc-900 ${
+                                  isLatest
+                                    ? 'bg-[#c28e62]'
+                                    : 'bg-slate-300 dark:bg-zinc-600'
+                                }`}
+                              />
+
+                              {/* Header: Pelaku & Waktu */}
+                              <div className="flex items-baseline justify-between gap-3">
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  <span className="text-xs font-semibold text-slate-800 dark:text-zinc-100 truncate">
+                                    {log.user}
+                                  </span>
+                                  <NewBadge date={log.timestamp} id={String(log.id)} size="xs" />
                                 </div>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <EmptyStatePanel
-                      icon={<Clock size={22} className="stroke-[1.8]" />}
-                      title="Belum Ada Riwayat Perubahan"
-                      description="Catatan audit untuk setiap perubahan data batch akan muncul otomatis di sini."
-                    />
-                  )}
-                </div>
-              )}
+                                <span className="text-[11px] text-slate-400 dark:text-zinc-500 tabular-nums shrink-0">
+                                  {log.timestamp}
+                                </span>
+                              </div>
+
+                              {/* Keterangan / Alasan */}
+                              {log.reason && (
+                                <p className="mt-0.5 text-xs text-slate-600 dark:text-zinc-300 leading-relaxed">
+                                  {log.reason}
+                                </p>
+                              )}
+
+                              {/* Detail Perubahan Ringkas */}
+                              {changesList.length > 0 && (
+                                <div className="mt-2 space-y-1">
+                                  {changesList.map((change: any, idx: number) => {
+                                    const oldVal = change?.old !== undefined && change?.old !== null ? String(change.old).trim() : '';
+                                    const newVal = change?.new !== undefined && change?.new !== null ? String(change.new).trim() : '-';
+                                    const hasOld = oldVal !== '' && oldVal !== '-';
+                                    return (
+                                      <div
+                                        key={idx}
+                                        className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[11px] leading-snug"
+                                      >
+                                        <span className="font-medium text-slate-400 dark:text-zinc-500 shrink-0">
+                                          {change.field}
+                                        </span>
+                                        <span className="text-slate-300 dark:text-zinc-700 select-none">·</span>
+                                        <div className="flex flex-wrap items-baseline gap-1.5 min-w-0">
+                                          {hasOld && (
+                                            <>
+                                              <span className="text-rose-500/90 dark:text-rose-400 line-through break-all">
+                                                {oldVal}
+                                              </span>
+                                              <span className="text-slate-400 dark:text-zinc-500 select-none">→</span>
+                                            </>
+                                          )}
+                                          <span className="text-emerald-600 dark:text-emerald-400 font-semibold break-all">
+                                            {newVal}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </li>
+                          );
+                        })}
+                      </ol>
+                    ) : (
+                      <EmptyStatePanel
+                        icon={<Clock size={22} className="stroke-[1.8]" />}
+                        title="Belum Ada Riwayat Perubahan"
+                        description="Catatan perubahan batch akan muncul di sini."
+                      />
+                    )}
+                  </div>
+                );
+              })()}
             </div>
             
             <div className="px-4 sm:px-6 py-3 bg-slate-50/90 dark:bg-zinc-800/90 border-t border-slate-100 dark:border-zinc-800 flex flex-col sm:flex-row items-center justify-between gap-3 flex-shrink-0">
