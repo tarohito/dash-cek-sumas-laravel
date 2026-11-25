@@ -460,6 +460,27 @@ class BatchController extends Controller
         $wProdCode = $grammar->wrap('prodCode');
         $wAllocatedAt = $grammar->wrap('allocatedAt');
 
+        $latestDateByProject = [];
+        $distinctAllocDates = DB::table('tags')
+            ->select(['project', 'allocatedAt'])
+            ->where('batchId', $batch->id)
+            ->whereNotNull('project')
+            ->where('status', 'Telah Digunakan')
+            ->distinct()
+            ->get();
+
+        foreach ($distinctAllocDates as $dRow) {
+            $pName = (string) ($dRow->project ?? '');
+            $dStr = isset($dRow->allocatedAt) ? trim((string) $dRow->allocatedAt) : '';
+            if ($pName === '') {
+                continue;
+            }
+            $ts = self::parseAllocationTimestamp($dStr);
+            if (!isset($latestDateByProject[$pName]) || $ts > $latestDateByProject[$pName]['ts']) {
+                $latestDateByProject[$pName] = ['ts' => $ts, 'date' => $dStr !== '' ? $dStr : null];
+            }
+        }
+
         $projectAllocations = DB::table('tags')
             ->selectRaw("project as name, COUNT(*) as count, MAX(specs) as specs, MAX(warranty) as warranty, MAX({$wCodeType}) as code_type, MAX({$wProdCode}) as prod_code, MAX(note) as note, MAX({$wAllocatedAt}) as date")
             ->where('batchId', $batch->id)
@@ -467,8 +488,12 @@ class BatchController extends Controller
             ->where('status', 'Telah Digunakan')
             ->groupBy('project')
             ->get()
-            ->map(function ($row) {
+            ->map(function ($row) use ($latestDateByProject) {
                 $arr = (array) $row;
+                $name = (string) ($arr['name'] ?? '');
+                $bestDate = $latestDateByProject[$name]['date'] ?? ($arr['date'] ?? null);
+                $sortTs = $latestDateByProject[$name]['ts'] ?? self::parseAllocationTimestamp($bestDate);
+
                 return [
                     'name' => $arr['name'] ?? null,
                     'count' => (int) ($arr['count'] ?? 0),
@@ -477,10 +502,24 @@ class BatchController extends Controller
                     'codeType' => $arr['code_type'] ?? null,
                     'prodCode' => $arr['prod_code'] ?? null,
                     'note' => $arr['note'] ?? null,
-                    'date' => $arr['date'] ?? null,
+                    'date' => $bestDate,
+                    '_sortTs' => $sortTs,
                 ];
             })
             ->all();
+
+        usort($projectAllocations, static function (array $a, array $b): int {
+            $cmp = ($b['_sortTs'] ?? 0) <=> ($a['_sortTs'] ?? 0);
+            if ($cmp !== 0) {
+                return $cmp;
+            }
+            return strcasecmp((string) ($a['name'] ?? ''), (string) ($b['name'] ?? ''));
+        });
+
+        $projectAllocations = array_map(static function (array $item): array {
+            unset($item['_sortTs']);
+            return $item;
+        }, $projectAllocations);
 
         $isB2B = RbacService::isBrandB2B($batch->brand, $batch->isB2B);
         $batchArr = (array) $batch;
@@ -497,6 +536,60 @@ class BatchController extends Controller
             'usedCount' => (int) ($tagStats->used ?? 0),
             'projects' => $isB2B ? $projectAllocations : [],
         ]);
+    }
+
+    private static function parseAllocationTimestamp(?string $raw): int
+    {
+        $str = trim((string) $raw);
+        if ($str === '' || $str === '-') {
+            return 0;
+        }
+
+        // ISO or standard PHP-parsable date first
+        if (preg_match('/^\d{4}-\d{2}-\d{2}/', $str)) {
+            $ts = strtotime($str);
+            return $ts !== false ? $ts : 0;
+        }
+
+        $months = [
+            'jan' => 1, 'januari' => 1,
+            'feb' => 2, 'februari' => 2,
+            'mar' => 3, 'maret' => 3,
+            'apr' => 4, 'april' => 4,
+            'mei' => 5, 'may' => 5,
+            'jun' => 6, 'juni' => 6,
+            'jul' => 7, 'juli' => 7,
+            'agt' => 8, 'agu' => 8, 'agustus' => 8, 'aug' => 8,
+            'sep' => 9, 'sept' => 9, 'september' => 9,
+            'okt' => 10, 'oktober' => 10, 'oct' => 10,
+            'nov' => 11, 'november' => 11,
+            'des' => 12, 'desember' => 12, 'dec' => 12,
+        ];
+
+        // Match Indonesian format e.g. "25 Nov 2026, 14.36 WIB" or "04 Nov 2026, 09:30"
+        if (preg_match('/^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})(?:[,\s]+(\d{1,2})[.:](\d{2})(?:[.:](\d{2}))?)?/u', $str, $m)) {
+            $day = (int) $m[1];
+            $monKey = strtolower($m[2]);
+            $month = $months[$monKey] ?? 0;
+            $year = (int) $m[3];
+            $hour = isset($m[4]) && $m[4] !== '' ? (int) $m[4] : 0;
+            $min = isset($m[5]) && $m[5] !== '' ? (int) $m[5] : 0;
+            $sec = isset($m[6]) && $m[6] !== '' ? (int) $m[6] : 0;
+
+            if ($month >= 1 && $month <= 12 && checkdate($month, $day, $year)) {
+                try {
+                    $dt = new \DateTimeImmutable(
+                        sprintf('%04d-%02d-%02d %02d:%02d:%02d', $year, $month, $day, $hour, $min, $sec),
+                        new \DateTimeZone('Asia/Jakarta')
+                    );
+                    return $dt->getTimestamp();
+                } catch (\Throwable) {
+                }
+            }
+        }
+
+        $fallback = strtotime($str);
+        return $fallback !== false ? $fallback : 0;
     }
 
     public function updateRedirectUrl(Request $request, string $id): JsonResponse

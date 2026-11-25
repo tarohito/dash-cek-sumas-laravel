@@ -411,4 +411,44 @@ class SumasFullEndpointTest extends TestCase
         ])->assertSuccessful();
         $this->assertSame(0, $dealloc2->json('deallocatedCount'), 'Duplicate deallocate must affect 0 tags');
     }
+
+    public function test_project_allocations_are_sorted_newest_to_oldest(): void
+    {
+        $auth = $this->loginAs('kalinggajeandy3@gmail.com', 'SumasPass2026!');
+
+        $batchCreate = $this->authedMutation($auth, 'POST', '/api/batches', [
+            'batchId' => 'BATCH-SORT-001',
+            'brand' => 'Sumas',
+            'sku' => 'Partisi Cubicle',
+            'qty' => 3,
+            'pinLength' => 6,
+            'isB2B' => true,
+        ])->assertSuccessful();
+        $batchId = $batchCreate->json('batch.id') ?? $batchCreate->json('id');
+
+        $tagIds = DB::table('tags')->where('batchId', $batchId)->pluck('id')->all();
+        $this->assertCount(3, $tagIds);
+
+        // Assign 3 projects across Okt, Nov, and Des (string order would fail without date parsing!)
+        DB::table('tags')->where('id', $tagIds[0])->update([
+            'status' => 'Telah Digunakan',
+            'project' => 'Zeta Oldest',
+            'allocatedAt' => '29 Okt 2026, 10.20 WIB',
+        ]);
+        DB::table('tags')->where('id', $tagIds[1])->update([
+            'status' => 'Telah Digunakan',
+            'project' => 'Alpha Newest',
+            'allocatedAt' => '02 Des 2026, 08.15 WIB',
+        ]);
+        DB::table('tags')->where('id', $tagIds[2])->update([
+            'status' => 'Telah Digunakan',
+            'project' => 'Middle Project',
+            'allocatedAt' => '25 Nov 2026, 14.36 WIB',
+        ]);
+
+        $summary = $this->authedGet($auth, "/api/batches/{$batchId}/summary")->assertStatus(200);
+        $names = array_column($summary->json('projects'), 'name');
+
+        $this->assertSame(['Alpha Newest', 'Middle Project', 'Zeta Oldest'], $names);
+    }
 }
